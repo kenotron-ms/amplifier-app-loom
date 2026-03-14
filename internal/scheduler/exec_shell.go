@@ -3,6 +3,7 @@ package scheduler
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"runtime"
 
@@ -24,6 +25,13 @@ func execShell(ctx context.Context, job *types.Job) (output string, exitCode int
 	}
 	if job.CWD != "" {
 		cmd.Dir = job.CWD
+	}
+	if len(job.RuntimeEnv) > 0 {
+		env := os.Environ()
+		for k, v := range job.RuntimeEnv {
+			env = append(env, k+"="+v)
+		}
+		cmd.Env = env
 	}
 
 	var buf bytes.Buffer

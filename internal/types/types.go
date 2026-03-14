@@ -88,6 +88,10 @@ type Job struct {
 
 	// Deprecated: top-level Command kept for backward compat with existing DB entries.
 	Command string `json:"command,omitempty"`
+
+	// RuntimeEnv holds transient env vars injected at dispatch time (e.g. JOB_WATCH_PATH).
+	// Not persisted — zeroed on every load from store.
+	RuntimeEnv map[string]string `json:"-"`
 }
 
 // ResolvedExecutor returns the effective executor type, defaulting to shell.

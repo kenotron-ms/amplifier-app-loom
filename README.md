@@ -22,9 +22,29 @@ A cross-platform scheduled job runner with a web UI and AI assistant. Run shell 
 
 ## Installation
 
-### Download a pre-built binary
+### macOS / Linux — one-liner
 
-Download the latest release for your platform from the [GitHub Releases](https://github.com/kenotron-ms/agent-daemon/releases) page:
+```sh
+curl -fsSL https://raw.githubusercontent.com/kenotron-ms/agent-daemon/main/install.sh | sh
+```
+
+This detects your OS and architecture, downloads the latest binary from GitHub Releases, installs it to `/usr/local/bin`, and tells you if you need to update your `PATH`.
+
+### Windows — PowerShell
+
+```powershell
+irm https://raw.githubusercontent.com/kenotron-ms/agent-daemon/main/install.ps1 | iex
+```
+
+Installs to `%LOCALAPPDATA%\Programs\agent-daemon` and adds it to your user `PATH` automatically. To use a different directory:
+
+```powershell
+$env:INSTALL_DIR="C:\tools"; irm .../install.ps1 | iex
+```
+
+### Manual download
+
+Pre-built binaries are on the [GitHub Releases](https://github.com/kenotron-ms/agent-daemon/releases) page:
 
 | Platform | Binary |
 |---|---|
@@ -34,12 +54,7 @@ Download the latest release for your platform from the [GitHub Releases](https:/
 | Linux (arm64) | `agent-daemon-linux-arm64` |
 | Windows (amd64) | `agent-daemon-windows-amd64.exe` |
 
-```sh
-# macOS example
-curl -L https://github.com/kenotron-ms/agent-daemon/releases/latest/download/agent-daemon-darwin-arm64 \
-  -o /usr/local/bin/agent-daemon
-chmod +x /usr/local/bin/agent-daemon
-```
+Download, `chmod +x` (Unix), and place in any directory on your `PATH`.
 
 ### Build from source
 
@@ -47,7 +62,7 @@ chmod +x /usr/local/bin/agent-daemon
 git clone https://github.com/kenotron-ms/agent-daemon.git
 cd agent-daemon
 make build          # native binary (with tray support if CGO available)
-make release        # all platforms → dist/
+make cross          # all platforms → dist/
 ```
 
 ## Quick start

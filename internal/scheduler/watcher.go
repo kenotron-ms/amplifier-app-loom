@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -59,22 +60,35 @@ func (s *Scheduler) runNotifyWatcher(ctx context.Context, job *types.Job, cfg *t
 
 	slog.Info("notify watcher started", "job", job.Name, "path", cfg.Path, "recursive", cfg.Recursive)
 
+	// lastSnapshot is used to verify real content changes before dispatching,
+	// preventing spurious fires from editors that touch mtime on open (e.g. VSCode).
+	lastSnapshot := snapshotDir(cfg.Path, cfg.Recursive)
+
 	var (
-		mu      sync.Mutex
-		pending bool
-		timer   *time.Timer
+		mu    sync.Mutex
+		timer *time.Timer
 	)
 
 	fire := func() {
+		current := snapshotDir(cfg.Path, cfg.Recursive)
 		mu.Lock()
-		defer mu.Unlock()
-		if !pending {
+		prev := lastSnapshot
+		lastSnapshot = current
+		mu.Unlock()
+
+		changed, changedPaths := diffSnapshot(prev, current, filter)
+		if !changed {
+			slog.Debug("notify watcher: no real content change, skipping dispatch", "job", job.Name)
 			return
 		}
-		pending = false
+
 		j, err := s.store.GetJob(ctx, job.ID)
 		if err != nil || !j.Enabled {
 			return
+		}
+		j.RuntimeEnv = map[string]string{"JOB_WATCH_PATH": cfg.Path}
+		if len(changedPaths) > 0 {
+			j.RuntimeEnv["JOB_EVENT_PATH"] = changedPaths[0]
 		}
 		s.dispatch(j)
 	}
@@ -82,7 +96,6 @@ func (s *Scheduler) runNotifyWatcher(ctx context.Context, job *types.Job, cfg *t
 	scheduleDispatch := func() {
 		mu.Lock()
 		defer mu.Unlock()
-		pending = true
 		if timer != nil {
 			timer.Reset(debounce)
 		} else {
@@ -142,29 +155,31 @@ func (s *Scheduler) runPollWatcher(ctx context.Context, job *types.Job, cfg *typ
 	snapshot := snapshotDir(cfg.Path, cfg.Recursive)
 
 	var (
-		mu      sync.Mutex
-		pending bool
-		timer   *time.Timer
+		mu           sync.Mutex
+		pendingPaths []string
+		timer        *time.Timer
 	)
 
 	fire := func() {
 		mu.Lock()
-		defer mu.Unlock()
-		if !pending {
-			return
-		}
-		pending = false
+		paths := pendingPaths
+		pendingPaths = nil
+		mu.Unlock()
 		j, err := s.store.GetJob(ctx, job.ID)
 		if err != nil || !j.Enabled {
 			return
 		}
+		j.RuntimeEnv = map[string]string{"JOB_WATCH_PATH": cfg.Path}
+		if len(paths) > 0 {
+			j.RuntimeEnv["JOB_EVENT_PATH"] = paths[0]
+		}
 		s.dispatch(j)
 	}
 
-	scheduleDispatch := func() {
+	scheduleDispatch := func(paths []string) {
 		mu.Lock()
 		defer mu.Unlock()
-		pending = true
+		pendingPaths = append(pendingPaths, paths...)
 		if timer != nil {
 			timer.Reset(debounce)
 		} else {
@@ -181,9 +196,9 @@ func (s *Scheduler) runPollWatcher(ctx context.Context, job *types.Job, cfg *typ
 			return
 		case <-ticker.C:
 			current := snapshotDir(cfg.Path, cfg.Recursive)
-			if changed, _ := diffSnapshot(snapshot, current, filter); changed {
+			if changed, paths := diffSnapshot(snapshot, current, filter); changed {
 				snapshot = current
-				scheduleDispatch()
+				scheduleDispatch(paths)
 			}
 		}
 	}
@@ -227,22 +242,40 @@ func fileStateFor(path string, info os.FileInfo) fileState {
 	}
 }
 
-// quickHash uses mtime+size for speed; falls back to content hash for small files.
+// quickHash returns a content-based hash for the file so that mtime-only changes
+// (e.g. editors touching a file on open) do not count as modifications.
+// For files ≤ 4 MB: full SHA256. For larger files: hash of first+last 256 KB + size,
+// which catches truncation and most edits without reading the whole file.
 func quickHash(path string, info os.FileInfo) string {
-	key := strings.Join([]string{
-		info.ModTime().String(),
-		string(rune(info.Size())),
-	}, "|")
-	if info.Size() <= 64*1024 {
-		if f, err := os.Open(path); err == nil {
-			defer f.Close()
-			h := sha256.New()
-			if _, err := io.Copy(h, f); err == nil {
-				return hex.EncodeToString(h.Sum(nil))
-			}
-		}
+	size := info.Size()
+	f, err := os.Open(path)
+	if err != nil {
+		// Fallback: size only (at least mtime changes won't matter)
+		return fmt.Sprintf("size:%d", size)
 	}
-	return key
+	defer f.Close()
+
+	h := sha256.New()
+	const fullThreshold = 4 * 1024 * 1024   // 4 MB
+	const chunkSize = 256 * 1024             // 256 KB
+	if size <= fullThreshold {
+		if _, err := io.Copy(h, f); err == nil {
+			return hex.EncodeToString(h.Sum(nil))
+		}
+	} else {
+		// Read first chunk
+		if _, err := io.CopyN(h, f, chunkSize); err != nil {
+			return fmt.Sprintf("size:%d", size)
+		}
+		// Read last chunk
+		if _, err := f.Seek(-chunkSize, io.SeekEnd); err == nil {
+			_, _ = io.CopyN(h, f, chunkSize)
+		}
+		// Include size so truncation is detected
+		fmt.Fprintf(h, "|size:%d", size)
+		return hex.EncodeToString(h.Sum(nil))
+	}
+	return fmt.Sprintf("size:%d", size)
 }
 
 // diffSnapshot returns true if current differs from previous.

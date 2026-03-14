@@ -66,6 +66,7 @@ Current jobs will be provided in each message. You can:
 - "loop": repeating interval as a Go duration (e.g. "30s", "5m", "1h")
 - "once": runs exactly once then auto-disables. trigger_schedule is an optional delay (e.g. "10m", "2h"). Leave empty to run right now.
 - "watch": fires when a file or directory changes. Requires watch_path. Optional: watch_recursive (bool), watch_events (array: "create","write","remove","rename","chmod"), watch_mode ("notify" for OS-level, "poll" for polling), watch_poll_interval (e.g. "2s"), watch_debounce (quiet window, e.g. "500ms").
+  When the job fires, the shell command receives two env vars: JOB_WATCH_PATH (the configured watch path) and JOB_EVENT_PATH (the specific file that changed). Example: ` + "`" + `echo \"changed: $JOB_EVENT_PATH in $JOB_WATCH_PATH\"` + "`" + ` or on Windows: ` + "`" + `echo changed: %JOB_EVENT_PATH% in %JOB_WATCH_PATH%` + "`" + `.
 
 ## Executor types
 Every job has an executor that controls how it runs:

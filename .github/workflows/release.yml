@@ -113,38 +113,26 @@ jobs:
 
             ### Install
 
-            **macOS (Apple Silicon)**
-            ```bash
-            curl -Lo agent-daemon https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/agent-daemon-darwin-arm64
-            chmod +x agent-daemon && sudo mv agent-daemon /usr/local/bin/
-            agent-daemon install && agent-daemon start
+            **macOS / Linux**
+            ```sh
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | sh
             ```
 
-            **macOS (Intel)**
-            ```bash
-            curl -Lo agent-daemon https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/agent-daemon-darwin-amd64
-            chmod +x agent-daemon && sudo mv agent-daemon /usr/local/bin/
-            agent-daemon install && agent-daemon start
+            **Windows (PowerShell)**
+            ```powershell
+            irm https://raw.githubusercontent.com/${{ github.repository }}/main/install.ps1 | iex
             ```
 
-            **Linux (amd64)**
-            ```bash
-            curl -Lo agent-daemon https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/agent-daemon-linux-amd64
-            chmod +x agent-daemon && sudo mv agent-daemon /usr/local/bin/
+            Then start the daemon:
+            ```sh
             agent-daemon install && agent-daemon start
-            ```
-
-            **Windows**
-            Download `agent-daemon-windows-amd64.exe`, rename to `agent-daemon.exe`, place in your PATH, then run:
-            ```
-            agent-daemon.exe install
-            agent-daemon.exe start
+            # Web UI → http://localhost:7700
             ```
 
             ### What's included
             - macOS/Linux builds include the system tray app (`agent-daemon tray`)
             - All builds include the web UI at `http://localhost:7700`
-            - Use `ANTHROPIC_API_KEY` env var to enable the AI assistant
+            - Configure your AI provider (Anthropic / OpenAI) from the Settings tab in the UI
           files: |
             dist/agent-daemon-darwin-arm64
             dist/agent-daemon-darwin-amd64
