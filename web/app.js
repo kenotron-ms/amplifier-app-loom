@@ -380,6 +380,7 @@ async function loadSettings() {
     onProviderChange();
     // Don't pre-fill key fields — just show placeholder if set
     if (s.anthropicKeySet) document.getElementById('s-anthropic-key').placeholder = '(key saved — enter new to replace)';
+    if (s.anthropicModel) document.getElementById('s-anthropic-model').value = s.anthropicModel;
     if (s.openAIKeySet) document.getElementById('s-openai-key').placeholder = '(key saved — enter new to replace)';
     if (s.openAIModel) document.getElementById('s-openai-model').value = s.openAIModel;
     updateChatOnboarding(s);
@@ -396,8 +397,9 @@ async function saveSettings() {
   const body = {
     aiProvider: document.getElementById('s-provider').value,
     anthropicKey: document.getElementById('s-anthropic-key').value.trim(),
+    anthropicModel: document.getElementById('s-anthropic-model').value,
     openAIKey: document.getElementById('s-openai-key').value.trim(),
-    openAIModel: document.getElementById('s-openai-model').value.trim(),
+    openAIModel: document.getElementById('s-openai-model').value,
   };
   try {
     const s = await api('PUT', '/api/settings', body);

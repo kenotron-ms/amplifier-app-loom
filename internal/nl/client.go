@@ -51,12 +51,17 @@ Be concise. Confirm what actions you took.`
 // AnthropicClient wraps the Anthropic SDK for job management conversations.
 type AnthropicClient struct {
 	client anthropic.Client
+	model  anthropic.Model
 	store  store.Store
 }
 
-func NewAnthropicClient(apiKey string, s store.Store) *AnthropicClient {
+func NewAnthropicClient(apiKey, model string, s store.Store) *AnthropicClient {
 	c := anthropic.NewClient(option.WithAPIKey(apiKey))
-	return &AnthropicClient{client: c, store: s}
+	m := anthropic.Model(model)
+	if m == "" {
+		m = anthropic.ModelClaudeSonnet4_6
+	}
+	return &AnthropicClient{client: c, model: m, store: s}
 }
 
 // Chat processes a natural language message, executes any tool calls, and returns the response.
@@ -77,7 +82,7 @@ func (c *AnthropicClient) Chat(ctx context.Context, userMessage string) (string,
 
 	for {
 		resp, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.ModelClaudeSonnet4_6,
+			Model:     c.model,
 			MaxTokens: 1024,
 			System: []anthropic.TextBlockParam{
 				{Text: systemWithJobs},

@@ -17,10 +17,11 @@ type Config struct {
 	MaxParallel int    `json:"maxParallel"`
 	QueueSize   int    `json:"queueSize"`
 	Paused      bool   `json:"paused"`
-	AnthropicKey string `json:"anthropicKey,omitempty"`
-	OpenAIKey   string `json:"openAIKey,omitempty"`
-	OpenAIModel string `json:"openAIModel,omitempty"` // e.g. "gpt-4o"
-	AIProvider  string `json:"aiProvider,omitempty"`  // "anthropic" | "openai"
+	AnthropicKey   string `json:"anthropicKey,omitempty"`
+	AnthropicModel string `json:"anthropicModel,omitempty"` // e.g. "claude-sonnet-4-6"
+	OpenAIKey      string `json:"openAIKey,omitempty"`
+	OpenAIModel    string `json:"openAIModel,omitempty"` // e.g. "gpt-5.4"
+	AIProvider     string `json:"aiProvider,omitempty"`  // "anthropic" | "openai"
 	LogLevel    string `json:"logLevel"`
 }
 

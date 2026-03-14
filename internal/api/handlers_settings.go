@@ -9,16 +9,18 @@ import (
 type settingsResponse struct {
 	AIProvider      string `json:"aiProvider"`
 	AnthropicKeySet bool   `json:"anthropicKeySet"`
+	AnthropicModel  string `json:"anthropicModel"`
 	OpenAIKeySet    bool   `json:"openAIKeySet"`
 	OpenAIModel     string `json:"openAIModel"`
 	AIConfigured    bool   `json:"aiConfigured"`
 }
 
 type settingsUpdateRequest struct {
-	AIProvider   string `json:"aiProvider"`
-	AnthropicKey string `json:"anthropicKey"`
-	OpenAIKey    string `json:"openAIKey"`
-	OpenAIModel  string `json:"openAIModel"`
+	AIProvider     string `json:"aiProvider"`
+	AnthropicKey   string `json:"anthropicKey"`
+	AnthropicModel string `json:"anthropicModel"`
+	OpenAIKey      string `json:"openAIKey"`
+	OpenAIModel    string `json:"openAIModel"`
 }
 
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
@@ -33,6 +35,7 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, settingsResponse{
 		AIProvider:      provider,
 		AnthropicKeySet: anthropicSet,
+		AnthropicModel:  s.cfg.AnthropicModel,
 		OpenAIKeySet:    openaiSet,
 		OpenAIModel:     s.cfg.OpenAIModel,
 		AIConfigured:    configured,
@@ -55,6 +58,9 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.OpenAIKey != "" {
 		s.cfg.OpenAIKey = req.OpenAIKey
+	}
+	if req.AnthropicModel != "" {
+		s.cfg.AnthropicModel = req.AnthropicModel
 	}
 	if req.OpenAIModel != "" {
 		s.cfg.OpenAIModel = req.OpenAIModel

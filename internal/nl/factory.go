@@ -15,7 +15,7 @@ func NewClientFromConfig(cfg *config.Config, s store.Store) NLClient {
 		}
 	default: // "anthropic" or empty
 		if cfg.AnthropicKey != "" {
-			return NewAnthropicClient(cfg.AnthropicKey, s)
+			return NewAnthropicClient(cfg.AnthropicKey, cfg.AnthropicModel, s)
 		}
 	}
 	return nil
