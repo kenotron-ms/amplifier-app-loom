@@ -29,157 +29,22 @@ func Run(port int) error {
 	return nil
 }
 
-// firstRunSetup shows an install dialog when the app is launched from a
-// .app bundle for the first time, letting the user choose user vs system
-// install level. Once installed, the tray proceeds normally.
-func firstRunSetup() {
-	exePath, err := os.Executable()
-	if err != nil {
-		return
-	}
-
-	// Only show setup when launched from within a .app bundle.
-	if !strings.Contains(exePath, ".app/Contents/MacOS/") {
-		return
-	}
-
-	// Check if already installed (either LaunchAgent or LaunchDaemon plist).
-	home, _ := os.UserHomeDir()
-	userPlist := filepath.Join(home, "Library", "LaunchAgents", "agent-daemon.plist")
-	systemPlist := "/Library/LaunchDaemons/agent-daemon.plist"
-	if _, err := os.Stat(userPlist); err == nil {
-		return
-	}
-	if _, err := os.Stat(systemPlist); err == nil {
-		return
-	}
-
-	// Ask user how they want to install.
-	level, ok := showInstallDialog()
-	if !ok {
-		return // user cancelled — tray opens without installing
-	}
-
-	slog.Info("first-run: installing daemon service", "level", level)
-
-	svc, err := internalsvc.NewServiceForControl(level)
-	if err != nil {
-		slog.Error("first-run: failed to create service", "err", err)
-		return
-	}
-
-	if level == internalsvc.LevelSystem {
-		// System install needs admin — run via osascript privileged shell.
-		script := fmt.Sprintf(
-			`do shell script "%s install --system" with administrator privileges`,
-			exePath,
-		)
-		if err := exec.Command("osascript", "-e", script).Run(); err != nil {
-			slog.Error("first-run: system install failed", "err", err)
-			return
-		}
-	} else {
-		if err := service.Control(svc, "install"); err != nil {
-			slog.Error("first-run: failed to install service", "err", err)
-			return
-		}
-		if err := service.Control(svc, "start"); err != nil {
-			slog.Error("first-run: failed to start service", "err", err)
-		}
-	}
-
-	// Install CLI so `agent-daemon` works from the terminal.
-	installCLI(exePath, home)
-
-	slog.Info("first-run: daemon installed and started")
-}
-
-// showInstallDialog shows a native macOS dialog asking the user how to install
-// the daemon. Returns the chosen level and true, or false if cancelled.
-func showInstallDialog() (internalsvc.InstallLevel, bool) {
-	script := `tell application "System Events"
-	set choice to display dialog "Agent Daemon needs to be installed as a background service.\n\nChoose how to install:" ¬
-		buttons {"Cancel", "System (all users, starts at boot)", "Just for me (login item)"} ¬
-		default button "Just for me (login item)" ¬
-		with title "Agent Daemon Setup" ¬
-		with icon caution
-	return button returned of choice
-end tell`
-
-	out, err := exec.Command("osascript", "-e", script).Output()
-	if err != nil {
-		// User clicked Cancel or closed the dialog.
-		return internalsvc.LevelUser, false
-	}
-
-	choice := strings.TrimSpace(string(out))
-	if strings.HasPrefix(choice, "System") {
-		return internalsvc.LevelSystem, true
-	}
-	return internalsvc.LevelUser, true
-}
-
-// installCLI copies the binary to /usr/local/bin via a macOS admin dialog,
-// so `agent-daemon` works from the terminal after installing the .app.
-// Falls back to ~/.local/bin (no dialog) if the user cancels.
-func installCLI(exePath, home string) {
-	target := "/usr/local/bin/agent-daemon"
-
-	// Already there — nothing to do.
-	if _, err := os.Lstat(target); err == nil {
-		return
-	}
-
-	// Try without privileges first (writable on Homebrew setups).
-	if err := os.Symlink(exePath, target); err == nil {
-		slog.Info("first-run: CLI symlinked to /usr/local/bin/agent-daemon")
-		return
-	}
-
-	// Ask macOS for admin privileges via the standard password dialog.
-	script := fmt.Sprintf(
-		`do shell script "ln -sf %q /usr/local/bin/agent-daemon" with administrator privileges`,
-		exePath,
-	)
-	if err := exec.Command("osascript", "-e", script).Run(); err == nil {
-		slog.Info("first-run: CLI installed to /usr/local/bin/agent-daemon (via admin dialog)")
-		return
-	}
-
-	// User cancelled or dialog failed — fall back to ~/.local/bin silently.
-	localBin := filepath.Join(home, ".local", "bin")
-	_ = os.MkdirAll(localBin, 0755)
-	target = filepath.Join(localBin, "agent-daemon")
-	if os.Symlink(exePath, target) == nil {
-		slog.Info("first-run: CLI symlinked to ~/.local/bin/agent-daemon")
-		addToShellProfile(home, localBin)
-	}
-}
-
-// addToShellProfile appends a PATH export for dir to shell rc files if not already present.
-func addToShellProfile(home, dir string) {
-	line := fmt.Sprintf("\nexport PATH=\"%s:$PATH\" # added by AgentDaemon\n", dir)
-	for _, rc := range []string{".zshrc", ".bashrc", ".bash_profile"} {
-		p := filepath.Join(home, rc)
-		if _, err := os.Stat(p); err != nil {
-			continue
-		}
-		contents, _ := os.ReadFile(p)
-		if strings.Contains(string(contents), dir) {
-			continue
-		}
-		if f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0644); err == nil {
-			_, _ = f.WriteString(line)
-			f.Close()
-		}
-	}
-}
-
 func onReady(port int) {
-	firstRunSetup()
+	// Step 1: copy CLI binary to PATH immediately — fast, no dialogs.
+	installCLIIfNeeded()
+
+	// Step 2: tray icon appears.
 	icon := makeIcon()
 	systray.SetTemplateIcon(icon, icon)
 	systray.SetTooltip("agent-daemon")
+
+	// Step 3: if not yet installed as a service, show a setup prompt at the
+	// top of the menu. The user can click it whenever they're ready.
+	var mSetup *systray.MenuItem
+	if !isServiceInstalled() {
+		mSetup = systray.AddMenuItem("⚙  Set up background service…", "Install agent-daemon so it starts automatically")
+		systray.AddSeparator()
+	}
 
 	// ── Status section ────────────────────────────────────────────────────────
 	mStatus := systray.AddMenuItem("⬤  Checking…", "Daemon status")
@@ -219,8 +84,19 @@ func onReady(port int) {
 	}()
 
 	// ── Event loop ────────────────────────────────────────────────────────────
+	setupCh := make(chan struct{})
+	if mSetup != nil {
+		setupCh = mSetup.ClickedCh
+	}
+
 	for {
 		select {
+		case <-setupCh:
+			if runServiceInstallDialog() && mSetup != nil {
+				mSetup.Hide()
+				setupCh = make(chan struct{}) // disarm
+			}
+
 		case <-mOpenUI.ClickedCh:
 			openBrowser(fmt.Sprintf("http://localhost:%d", port))
 
@@ -248,6 +124,141 @@ func onReady(port int) {
 		case <-mQuit.ClickedCh:
 			systray.Quit()
 			return
+		}
+	}
+}
+
+// isServiceInstalled returns true if a LaunchAgent or LaunchDaemon plist exists.
+func isServiceInstalled() bool {
+	home, _ := os.UserHomeDir()
+	if _, err := os.Stat(filepath.Join(home, "Library", "LaunchAgents", "agent-daemon.plist")); err == nil {
+		return true
+	}
+	if _, err := os.Stat("/Library/LaunchDaemons/agent-daemon.plist"); err == nil {
+		return true
+	}
+	return false
+}
+
+// runServiceInstallDialog shows the install dialog and performs the install.
+// Returns true if install succeeded.
+func runServiceInstallDialog() bool {
+	exePath, err := os.Executable()
+	if err != nil {
+		return false
+	}
+
+	level, ok := showInstallDialog()
+	if !ok {
+		return false // user cancelled
+	}
+
+	slog.Info("setup: installing daemon service", "level", level)
+
+	if level == internalsvc.LevelSystem {
+		script := fmt.Sprintf(
+			`do shell script "%s install --system" with administrator privileges`,
+			exePath,
+		)
+		if err := exec.Command("osascript", "-e", script).Run(); err != nil {
+			slog.Error("setup: system install failed", "err", err)
+			return false
+		}
+		return true
+	}
+
+	svc, err := internalsvc.NewServiceForControl(internalsvc.LevelUser)
+	if err != nil {
+		return false
+	}
+	if err := service.Control(svc, "install"); err != nil {
+		slog.Error("setup: install failed", "err", err)
+		return false
+	}
+	_ = service.Control(svc, "start")
+	return true
+}
+
+// showInstallDialog presents a native macOS dialog to choose install level.
+// Returns the chosen level and true, or false if cancelled.
+func showInstallDialog() (internalsvc.InstallLevel, bool) {
+	script := `tell application "System Events"
+	set choice to display dialog "Choose how Agent Daemon should run in the background:" ¬
+		buttons {"Cancel", "System (all users, starts at boot)", "Just for me (login item)"} ¬
+		default button "Just for me (login item)" ¬
+		with title "Agent Daemon Setup" ¬
+		with icon caution
+	return button returned of choice
+end tell`
+
+	out, err := exec.Command("osascript", "-e", script).Output()
+	if err != nil {
+		return internalsvc.LevelUser, false
+	}
+	if strings.HasPrefix(strings.TrimSpace(string(out)), "System") {
+		return internalsvc.LevelSystem, true
+	}
+	return internalsvc.LevelUser, true
+}
+
+// installCLIIfNeeded symlinks the binary to /usr/local/bin when running from
+// a .app bundle for the first time so `agent-daemon` works in the terminal.
+func installCLIIfNeeded() {
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	if !strings.Contains(exePath, ".app/Contents/MacOS/") {
+		return
+	}
+
+	home, _ := os.UserHomeDir()
+	target := "/usr/local/bin/agent-daemon"
+
+	if _, err := os.Lstat(target); err == nil {
+		return // already there
+	}
+
+	// Try without privileges first (writable on Homebrew setups).
+	if os.Symlink(exePath, target) == nil {
+		slog.Info("installed CLI to /usr/local/bin/agent-daemon")
+		return
+	}
+
+	// Ask for admin via macOS password dialog.
+	script := fmt.Sprintf(
+		`do shell script "ln -sf %q /usr/local/bin/agent-daemon" with administrator privileges`,
+		exePath,
+	)
+	if exec.Command("osascript", "-e", script).Run() == nil {
+		slog.Info("installed CLI to /usr/local/bin/agent-daemon (via admin dialog)")
+		return
+	}
+
+	// Fall back to ~/.local/bin silently.
+	localBin := filepath.Join(home, ".local", "bin")
+	_ = os.MkdirAll(localBin, 0755)
+	if os.Symlink(exePath, filepath.Join(localBin, "agent-daemon")) == nil {
+		slog.Info("installed CLI to ~/.local/bin/agent-daemon")
+		addToShellProfile(home, localBin)
+	}
+}
+
+// addToShellProfile appends a PATH export to shell rc files if not already present.
+func addToShellProfile(home, dir string) {
+	line := fmt.Sprintf("\nexport PATH=\"%s:$PATH\" # added by AgentDaemon\n", dir)
+	for _, rc := range []string{".zshrc", ".bashrc", ".bash_profile"} {
+		p := filepath.Join(home, rc)
+		if _, err := os.Stat(p); err != nil {
+			continue
+		}
+		contents, _ := os.ReadFile(p)
+		if strings.Contains(string(contents), dir) {
+			continue
+		}
+		if f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+			_, _ = f.WriteString(line)
+			f.Close()
 		}
 	}
 }
