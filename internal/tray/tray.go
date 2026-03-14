@@ -29,47 +29,94 @@ func Run(port int) error {
 	return nil
 }
 
-// firstRunSetup auto-installs the daemon when the app is launched from a
-// .app bundle for the first time. It installs the LaunchAgent (pointing to
-// the binary inside the bundle) and starts the daemon, then symlinks the
-// binary to /usr/local/bin so it's accessible from the terminal.
+// firstRunSetup shows an install dialog when the app is launched from a
+// .app bundle for the first time, letting the user choose user vs system
+// install level. Once installed, the tray proceeds normally.
 func firstRunSetup() {
 	exePath, err := os.Executable()
 	if err != nil {
 		return
 	}
 
-	// Only auto-install when launched from within a .app bundle.
+	// Only show setup when launched from within a .app bundle.
 	if !strings.Contains(exePath, ".app/Contents/MacOS/") {
 		return
 	}
 
-	// Check if already installed (LaunchAgent plist exists).
+	// Check if already installed (either LaunchAgent or LaunchDaemon plist).
 	home, _ := os.UserHomeDir()
-	plistPath := filepath.Join(home, "Library", "LaunchAgents", "agent-daemon.plist")
-	if _, err := os.Stat(plistPath); err == nil {
-		return // already installed, nothing to do
+	userPlist := filepath.Join(home, "Library", "LaunchAgents", "agent-daemon.plist")
+	systemPlist := "/Library/LaunchDaemons/agent-daemon.plist"
+	if _, err := os.Stat(userPlist); err == nil {
+		return
+	}
+	if _, err := os.Stat(systemPlist); err == nil {
+		return
 	}
 
-	slog.Info("first-run: installing daemon service")
+	// Ask user how they want to install.
+	level, ok := showInstallDialog()
+	if !ok {
+		return // user cancelled — tray opens without installing
+	}
 
-	svc, err := internalsvc.NewServiceForControl(internalsvc.LevelUser)
+	slog.Info("first-run: installing daemon service", "level", level)
+
+	svc, err := internalsvc.NewServiceForControl(level)
 	if err != nil {
 		slog.Error("first-run: failed to create service", "err", err)
 		return
 	}
-	if err := service.Control(svc, "install"); err != nil {
-		slog.Error("first-run: failed to install service", "err", err)
-		return
-	}
-	if err := service.Control(svc, "start"); err != nil {
-		slog.Error("first-run: failed to start service", "err", err)
+
+	if level == internalsvc.LevelSystem {
+		// System install needs admin — run via osascript privileged shell.
+		script := fmt.Sprintf(
+			`do shell script "%s install --system" with administrator privileges`,
+			exePath,
+		)
+		if err := exec.Command("osascript", "-e", script).Run(); err != nil {
+			slog.Error("first-run: system install failed", "err", err)
+			return
+		}
+	} else {
+		if err := service.Control(svc, "install"); err != nil {
+			slog.Error("first-run: failed to install service", "err", err)
+			return
+		}
+		if err := service.Control(svc, "start"); err != nil {
+			slog.Error("first-run: failed to start service", "err", err)
+		}
 	}
 
-	// Install CLI: try /usr/local/bin first, fall back to ~/.local/bin.
+	// Install CLI so `agent-daemon` works from the terminal.
 	installCLI(exePath, home)
 
 	slog.Info("first-run: daemon installed and started")
+}
+
+// showInstallDialog shows a native macOS dialog asking the user how to install
+// the daemon. Returns the chosen level and true, or false if cancelled.
+func showInstallDialog() (internalsvc.InstallLevel, bool) {
+	script := `tell application "System Events"
+	set choice to display dialog "Agent Daemon needs to be installed as a background service.\n\nChoose how to install:" ¬
+		buttons {"Cancel", "System (all users, starts at boot)", "Just for me (login item)"} ¬
+		default button "Just for me (login item)" ¬
+		with title "Agent Daemon Setup" ¬
+		with icon caution
+	return button returned of choice
+end tell`
+
+	out, err := exec.Command("osascript", "-e", script).Output()
+	if err != nil {
+		// User clicked Cancel or closed the dialog.
+		return internalsvc.LevelUser, false
+	}
+
+	choice := strings.TrimSpace(string(out))
+	if strings.HasPrefix(choice, "System") {
+		return internalsvc.LevelSystem, true
+	}
+	return internalsvc.LevelUser, true
 }
 
 // installCLI copies the binary to /usr/local/bin via a macOS admin dialog,
