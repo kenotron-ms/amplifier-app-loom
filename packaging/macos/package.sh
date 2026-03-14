@@ -55,15 +55,6 @@ mkdir -p "$APP_DIR/Contents/Resources"
 cp "$BINARY" "$APP_DIR/Contents/MacOS/agent-daemon"
 chmod +x "$APP_DIR/Contents/MacOS/agent-daemon"
 
-# Launcher script: CFBundleExecutable that macOS calls on open.
-# Execs the real binary with 'tray' so the app opens the menu bar UI.
-cat > "$APP_DIR/Contents/MacOS/AgentDaemon" <<'LAUNCHER'
-#!/bin/sh
-DIR="$(cd "$(dirname "$0")" && pwd)"
-exec "$DIR/agent-daemon" tray "$@"
-LAUNCHER
-chmod +x "$APP_DIR/Contents/MacOS/AgentDaemon"
-
 sed "s/{{VERSION}}/$VERSION/g" "$SCRIPT_DIR/Info.plist" > "$APP_DIR/Contents/Info.plist"
 
 # ── Code sign ─────────────────────────────────────────────────────────────────

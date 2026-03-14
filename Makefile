@@ -1,7 +1,7 @@
 BINARY   = agent-daemon
 DIST     = dist
 MODULE   = github.com/ms/agent-daemon
-VERSION  = 0.2.2
+VERSION  = 0.2.3
 LDFLAGS  = -ldflags "-X $(MODULE)/internal/api.Version=$(VERSION) -s -w"
 
 .PHONY: build run install-svc uninstall-svc test clean cross

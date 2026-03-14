@@ -9,7 +9,7 @@
     <key>CFBundleDisplayName</key>
     <string>Agent Daemon</string>
     <key>CFBundleExecutable</key>
-    <string>AgentDaemon</string>
+    <string>agent-daemon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>
@@ -23,5 +23,7 @@
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
 </dict>
 </plist>

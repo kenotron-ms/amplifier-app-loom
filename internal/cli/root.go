@@ -20,6 +20,11 @@ Runs as a system service (launchd / systemd / Windows Service) with:
 }
 
 func Execute() {
+	// When launched as a macOS .app bundle, macOS sets __CFBundleIdentifier
+	// in the environment. In that case, default to the tray command.
+	if os.Getenv("__CFBundleIdentifier") != "" && len(os.Args) == 1 {
+		os.Args = append(os.Args, "tray")
+	}
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

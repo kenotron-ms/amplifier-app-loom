@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getlantern/systray"
+	"fyne.io/systray"
 	"github.com/kardianos/service"
 
 	internalsvc "github.com/ms/agent-daemon/internal/service"
@@ -30,10 +30,7 @@ func Run(port int) error {
 }
 
 func onReady(port int) {
-	// Step 1: copy CLI binary to PATH immediately — fast, no dialogs.
-	installCLIIfNeeded()
-
-	// Step 2: tray icon appears.
+	// Step 1: tray icon appears immediately.
 	icon := makeIcon()
 	systray.SetTemplateIcon(icon, icon)
 	systray.SetTooltip("agent-daemon")
@@ -75,7 +72,10 @@ func onReady(port int) {
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit Tray", "Close the tray app (daemon keeps running)")
 
-	// ── Background poller ─────────────────────────────────────────────────────
+	// ── Background tasks ──────────────────────────────────────────────────────
+	// CLI install runs in background — may show an admin dialog, must not block.
+	go installCLIIfNeeded()
+
 	go func() {
 		for {
 			updateStatus(port, mStatus, mDetails, mStart, mStop, mPause, mResume)
