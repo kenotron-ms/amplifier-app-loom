@@ -85,9 +85,51 @@ jobs:
           path: dist/${{ matrix.asset }}
           retention-days: 1
 
+  sign-macos:
+    name: Sign & Notarize macOS (${{ matrix.arch }})
+    needs: build
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            asset: agent-daemon-darwin-arm64
+          - arch: amd64
+            asset: agent-daemon-darwin-amd64
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download darwin artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.asset }}
+          path: dist
+
+      - name: Make binary executable
+        run: chmod +x dist/${{ matrix.asset }}
+
+      - name: Package, sign, notarize, create DMG
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          bash packaging/macos/package.sh \
+            dist/${{ matrix.asset }} \
+            ${{ matrix.arch }} \
+            "$VERSION"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: agent-daemon-darwin-${{ matrix.arch }}.dmg
+          path: dist/agent-daemon-darwin-${{ matrix.arch }}.dmg
+          retention-days: 1
+
   release:
     name: Create Release
-    needs: build
+    needs: [build, sign-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -131,12 +173,12 @@ jobs:
             ```
 
             ### What's included
-            - macOS/Linux builds include the system tray app (`agent-daemon tray`)
+            - macOS builds ship as a signed & notarized `.dmg` with the system tray app (`agent-daemon tray`)
             - All builds include the web UI at `http://localhost:7700`
             - Configure your AI provider (Anthropic / OpenAI) from the Settings tab in the UI
           files: |
-            dist/agent-daemon-darwin-arm64
-            dist/agent-daemon-darwin-amd64
+            dist/agent-daemon-darwin-arm64.dmg
+            dist/agent-daemon-darwin-amd64.dmg
             dist/agent-daemon-linux-amd64
             dist/agent-daemon-linux-arm64
             dist/agent-daemon-windows-amd64.exe
