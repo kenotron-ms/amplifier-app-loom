@@ -53,7 +53,7 @@ func firstRunSetup() {
 
 	slog.Info("first-run: installing daemon service")
 
-	svc, _, err := internalsvc.NewService(internalsvc.LevelUser)
+	svc, err := internalsvc.NewServiceForControl(internalsvc.LevelUser)
 	if err != nil {
 		slog.Error("first-run: failed to create service", "err", err)
 		return
@@ -66,16 +66,66 @@ func firstRunSetup() {
 		slog.Error("first-run: failed to start service", "err", err)
 	}
 
-	// Best-effort: symlink to /usr/local/bin so `agent-daemon` works in terminal.
-	target := "/usr/local/bin/agent-daemon"
-	if _, err := os.Lstat(target); os.IsNotExist(err) {
-		_ = os.MkdirAll("/usr/local/bin", 0755)
-		if err := os.Symlink(exePath, target); err == nil {
-			slog.Info("first-run: symlinked to /usr/local/bin/agent-daemon")
-		}
-	}
+	// Install CLI: try /usr/local/bin first, fall back to ~/.local/bin.
+	installCLI(exePath, home)
 
 	slog.Info("first-run: daemon installed and started")
+}
+
+// installCLI copies the binary to /usr/local/bin via a macOS admin dialog,
+// so `agent-daemon` works from the terminal after installing the .app.
+// Falls back to ~/.local/bin (no dialog) if the user cancels.
+func installCLI(exePath, home string) {
+	target := "/usr/local/bin/agent-daemon"
+
+	// Already there — nothing to do.
+	if _, err := os.Lstat(target); err == nil {
+		return
+	}
+
+	// Try without privileges first (writable on Homebrew setups).
+	if err := os.Symlink(exePath, target); err == nil {
+		slog.Info("first-run: CLI symlinked to /usr/local/bin/agent-daemon")
+		return
+	}
+
+	// Ask macOS for admin privileges via the standard password dialog.
+	script := fmt.Sprintf(
+		`do shell script "ln -sf %q /usr/local/bin/agent-daemon" with administrator privileges`,
+		exePath,
+	)
+	if err := exec.Command("osascript", "-e", script).Run(); err == nil {
+		slog.Info("first-run: CLI installed to /usr/local/bin/agent-daemon (via admin dialog)")
+		return
+	}
+
+	// User cancelled or dialog failed — fall back to ~/.local/bin silently.
+	localBin := filepath.Join(home, ".local", "bin")
+	_ = os.MkdirAll(localBin, 0755)
+	target = filepath.Join(localBin, "agent-daemon")
+	if os.Symlink(exePath, target) == nil {
+		slog.Info("first-run: CLI symlinked to ~/.local/bin/agent-daemon")
+		addToShellProfile(home, localBin)
+	}
+}
+
+// addToShellProfile appends a PATH export for dir to shell rc files if not already present.
+func addToShellProfile(home, dir string) {
+	line := fmt.Sprintf("\nexport PATH=\"%s:$PATH\" # added by AgentDaemon\n", dir)
+	for _, rc := range []string{".zshrc", ".bashrc", ".bash_profile"} {
+		p := filepath.Join(home, rc)
+		if _, err := os.Stat(p); err != nil {
+			continue
+		}
+		contents, _ := os.ReadFile(p)
+		if strings.Contains(string(contents), dir) {
+			continue
+		}
+		if f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+			_, _ = f.WriteString(line)
+			f.Close()
+		}
+	}
 }
 
 func onReady(port int) {
@@ -211,7 +261,7 @@ func updateStatus(port int, mStatus, mDetails, mStart, mStop, mPause, mResume *s
 }
 
 func installService(level internalsvc.InstallLevel) {
-	svc, _, err := internalsvc.NewService(level)
+	svc, err := internalsvc.NewServiceForControl(level)
 	if err != nil {
 		return
 	}
@@ -220,9 +270,8 @@ func installService(level internalsvc.InstallLevel) {
 }
 
 func uninstallService() {
-	// Try both levels
 	for _, level := range []internalsvc.InstallLevel{internalsvc.LevelUser, internalsvc.LevelSystem} {
-		svc, _, err := internalsvc.NewService(level)
+		svc, err := internalsvc.NewServiceForControl(level)
 		if err != nil {
 			continue
 		}
@@ -232,7 +281,7 @@ func uninstallService() {
 }
 
 func runServiceControl(level internalsvc.InstallLevel, action string) {
-	svc, _, err := internalsvc.NewService(level)
+	svc, err := internalsvc.NewServiceForControl(level)
 	if err != nil {
 		return
 	}

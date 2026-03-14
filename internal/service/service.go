@@ -87,6 +87,7 @@ func BuildServiceConfig(level InstallLevel) *service.Config {
 }
 
 // NewService creates a kardianos service wrapping our daemon.
+// Opens the store — only use when the daemon will actually run.
 func NewService(level InstallLevel) (service.Service, *Program, error) {
 	daemon, err := NewDaemon()
 	if err != nil {
@@ -98,6 +99,18 @@ func NewService(level InstallLevel) (service.Service, *Program, error) {
 		return nil, nil, err
 	}
 	return svc, p, nil
+}
+
+// NewServiceForControl creates a kardianos service for install/uninstall/start/stop
+// operations only. It does NOT open the database, so it works even while the
+// daemon is already running.
+func NewServiceForControl(level InstallLevel) (service.Service, error) {
+	p := &Program{daemon: nil}
+	svc, err := service.New(p, BuildServiceConfig(level))
+	if err != nil {
+		return nil, err
+	}
+	return svc, nil
 }
 
 // RunDaemon starts the daemon directly (used by _serve sub-command).
@@ -112,9 +125,8 @@ func RunDaemon() error {
 // DetectInstallLevel checks which level the service is currently installed at.
 // Returns LevelUser, LevelSystem, or an error if not installed.
 func DetectInstallLevel() (InstallLevel, error) {
-	// Try user first
 	for _, level := range []InstallLevel{LevelUser, LevelSystem} {
-		svc, _, err := NewService(level)
+		svc, err := NewServiceForControl(level)
 		if err != nil {
 			continue
 		}

@@ -31,7 +31,7 @@ Use --system to install system-wide (starts at boot, requires admin/sudo).`,
   sudo agent-daemon install --system  # system-wide (boot daemon)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		level := installLevel(cmd)
-		svc, _, err := internalsvc.NewService(level)
+		svc, err := internalsvc.NewServiceForControl(level)
 		if err != nil {
 			return err
 		}
@@ -79,7 +79,7 @@ var uninstallCmd = &cobra.Command{
   sudo agent-daemon uninstall --system  # remove system-level service`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		level := installLevel(cmd)
-		svc, _, err := internalsvc.NewService(level)
+		svc, err := internalsvc.NewServiceForControl(level)
 		if err != nil {
 			return err
 		}
@@ -97,7 +97,7 @@ var startCmd = &cobra.Command{
 	Short: "Start the agent-daemon service",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		level := installLevel(cmd)
-		svc, _, err := internalsvc.NewService(level)
+		svc, err := internalsvc.NewServiceForControl(level)
 		if err != nil {
 			return err
 		}
@@ -114,7 +114,7 @@ var stopCmd = &cobra.Command{
 	Short: "Stop the agent-daemon service",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		level := installLevel(cmd)
-		svc, _, err := internalsvc.NewService(level)
+		svc, err := internalsvc.NewServiceForControl(level)
 		if err != nil {
 			return err
 		}
