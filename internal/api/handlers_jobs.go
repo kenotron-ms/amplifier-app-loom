@@ -32,10 +32,6 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
-	if job.Command == "" {
-		writeError(w, http.StatusBadRequest, "command is required")
-		return
-	}
 
 	job.ID = uuid.New().String()
 	job.CreatedAt = time.Now()
@@ -97,6 +93,24 @@ func (s *Server) updateJob(w http.ResponseWriter, r *http.Request) {
 	}
 	existing.MaxRetries = updates.MaxRetries
 	existing.Enabled = updates.Enabled
+
+	// Merge executor config — replace whichever executor section is provided
+	if updates.Executor != "" {
+		existing.Executor = updates.Executor
+	}
+	if updates.Shell != nil {
+		existing.Shell = updates.Shell
+	}
+	if updates.ClaudeCode != nil {
+		existing.ClaudeCode = updates.ClaudeCode
+	}
+	if updates.Amplifier != nil {
+		existing.Amplifier = updates.Amplifier
+	}
+	if updates.Watch != nil {
+		existing.Watch = updates.Watch
+	}
+
 	existing.UpdatedAt = time.Now()
 
 	if err := s.store.SaveJob(r.Context(), existing); err != nil {
