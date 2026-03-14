@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/ms/agent-daemon/internal/store"
+	"github.com/ms/agent-daemon/internal/types"
 )
 
 const openAIEndpoint = "https://api.openai.com/v1/chat/completions"
@@ -88,16 +89,17 @@ type oaiError struct {
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
 
-func (c *OpenAIClient) Chat(ctx context.Context, userMessage string) (string, []string, error) {
+func (c *OpenAIClient) Chat(ctx context.Context, userMessage string, history []types.ChatMessage) (string, []string, error) {
 	jobs, _ := c.store.ListJobs(ctx)
 	jobsJSON, _ := json.MarshalIndent(jobs, "", "  ")
 
 	sysContent := buildSystemPrompt() + "\n\nCurrent jobs:\n```json\n" + string(jobsJSON) + "\n```"
 
-	messages := []oaiMessage{
-		{Role: "system", Content: sysContent},
-		{Role: "user", Content: userMessage},
+	messages := []oaiMessage{{Role: "system", Content: sysContent}}
+	for _, m := range history {
+		messages = append(messages, oaiMessage{Role: m.Role, Content: m.Content})
 	}
+	messages = append(messages, oaiMessage{Role: "user", Content: userMessage})
 
 	tools := buildOpenAITools()
 

@@ -87,6 +87,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Runs
 	mux.HandleFunc("GET /api/runs", s.listRuns)
+	mux.HandleFunc("DELETE /api/runs", s.clearRuns)
 	mux.HandleFunc("GET /api/runs/{id}", s.getRun)
 	mux.HandleFunc("GET /api/jobs/{id}/runs", s.listJobRuns)
 
@@ -103,6 +104,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Natural language chat
 	mux.HandleFunc("POST /api/chat", s.chat)
+	mux.HandleFunc("GET /api/chat/history", s.getChatHistory)
+	mux.HandleFunc("DELETE /api/chat/history", s.clearChatHistory)
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────

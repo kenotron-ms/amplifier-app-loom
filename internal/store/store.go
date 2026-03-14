@@ -20,6 +20,12 @@ type Store interface {
 	GetRun(ctx context.Context, id string) (*types.JobRun, error)
 	ListRunsForJob(ctx context.Context, jobID string, limit int) ([]*types.JobRun, error)
 	ListRecentRuns(ctx context.Context, limit int) ([]*types.JobRun, error)
+	DeleteAllRuns(ctx context.Context) error
+
+	// Chat history
+	AppendChatMessage(ctx context.Context, msg types.ChatMessage) error
+	ListChatHistory(ctx context.Context) ([]types.ChatMessage, error)
+	ClearChatHistory(ctx context.Context) error
 
 	// Config
 	GetConfig(ctx context.Context) (*config.Config, error)

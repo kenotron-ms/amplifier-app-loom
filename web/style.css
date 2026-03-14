@@ -166,9 +166,10 @@ header h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; color: var
   font-family: monospace; font-size: 11px;
   background: var(--bg3); color: var(--text2);
   border-radius: 4px; padding: 6px 8px; margin-top: 6px;
-  white-space: pre-wrap; max-height: 80px; overflow-y: auto;
+  white-space: pre-wrap; max-height: 300px; overflow-y: auto;
   border: 1px solid var(--border);
 }
+.run-log-toggle { font-size: 11px; color: var(--accent); text-decoration: none; margin-left: 4px; }
 
 /* Chat */
 .chat-messages {

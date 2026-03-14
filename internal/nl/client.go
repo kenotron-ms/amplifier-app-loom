@@ -10,11 +10,12 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 
 	"github.com/ms/agent-daemon/internal/store"
+	"github.com/ms/agent-daemon/internal/types"
 )
 
 // NLClient is the interface for natural language chat clients.
 type NLClient interface {
-	Chat(ctx context.Context, message string) (string, []string, error)
+	Chat(ctx context.Context, message string, history []types.ChatMessage) (string, []string, error)
 	Ping(ctx context.Context) error
 }
 
@@ -105,7 +106,7 @@ func NewAnthropicClient(apiKey, model string, s store.Store) *AnthropicClient {
 }
 
 // Chat processes a natural language message, executes any tool calls, and returns the response.
-func (c *AnthropicClient) Chat(ctx context.Context, userMessage string) (string, []string, error) {
+func (c *AnthropicClient) Chat(ctx context.Context, userMessage string, history []types.ChatMessage) (string, []string, error) {
 	jobs, _ := c.store.ListJobs(ctx)
 	jobsJSON, _ := json.MarshalIndent(jobs, "", "  ")
 
@@ -113,9 +114,16 @@ func (c *AnthropicClient) Chat(ctx context.Context, userMessage string) (string,
 
 	tools := buildTools()
 
-	messages := []anthropic.MessageParam{
-		anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage)),
+	// Build message list from history + new user message.
+	messages := make([]anthropic.MessageParam, 0, len(history)+1)
+	for _, m := range history {
+		if m.Role == "user" {
+			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(m.Content)))
+		} else {
+			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(m.Content)))
+		}
 	}
+	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage)))
 
 	var actions []string
 	var finalText string

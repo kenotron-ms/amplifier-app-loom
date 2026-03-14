@@ -21,6 +21,7 @@ var (
 	bucketRuns      = []byte("runs")
 	bucketRunsByJob = []byte("runs_by_job") // key: jobID/runID → "" (index)
 	bucketConfig    = []byte("config")
+	bucketChat      = []byte("chat")
 	keyConfig       = []byte("cfg")
 )
 
@@ -46,7 +47,7 @@ func Open(path string) (*BoltStore, error) {
 
 func (s *BoltStore) migrate() error {
 	return s.db.Update(func(tx *bolt.Tx) error {
-		for _, b := range [][]byte{bucketJobs, bucketRuns, bucketRunsByJob, bucketConfig} {
+		for _, b := range [][]byte{bucketJobs, bucketRuns, bucketRunsByJob, bucketConfig, bucketChat} {
 			if _, err := tx.CreateBucketIfNotExists(b); err != nil {
 				return err
 			}
@@ -213,6 +214,22 @@ func (s *BoltStore) ListRecentRuns(_ context.Context, limit int) ([]*types.JobRu
 	return runs, nil
 }
 
+func (s *BoltStore) DeleteAllRuns(_ context.Context) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		if err := tx.DeleteBucket(bucketRuns); err != nil {
+			return err
+		}
+		if err := tx.DeleteBucket(bucketRunsByJob); err != nil {
+			return err
+		}
+		if _, err := tx.CreateBucket(bucketRuns); err != nil {
+			return err
+		}
+		_, err := tx.CreateBucket(bucketRunsByJob)
+		return err
+	})
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 
 func (s *BoltStore) GetConfig(_ context.Context) (*config.Config, error) {
@@ -234,5 +251,44 @@ func (s *BoltStore) SaveConfig(_ context.Context, cfg *config.Config) error {
 			return err
 		}
 		return tx.Bucket(bucketConfig).Put(keyConfig, data)
+	})
+}
+
+// ── Chat history ──────────────────────────────────────────────────────────────
+
+func (s *BoltStore) AppendChatMessage(_ context.Context, msg types.ChatMessage) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		data, err := json.Marshal(msg)
+		if err != nil {
+			return err
+		}
+		// Key: timestamp-prefixed so iteration is chronological.
+		key := []byte(msg.CreatedAt.UTC().Format(time.RFC3339Nano) + "/" + msg.ID)
+		return tx.Bucket(bucketChat).Put(key, data)
+	})
+}
+
+func (s *BoltStore) ListChatHistory(_ context.Context) ([]types.ChatMessage, error) {
+	var msgs []types.ChatMessage
+	err := s.db.View(func(tx *bolt.Tx) error {
+		return tx.Bucket(bucketChat).ForEach(func(_, v []byte) error {
+			var m types.ChatMessage
+			if err := json.Unmarshal(v, &m); err != nil {
+				return err
+			}
+			msgs = append(msgs, m)
+			return nil
+		})
+	})
+	return msgs, err
+}
+
+func (s *BoltStore) ClearChatHistory(_ context.Context) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		if err := tx.DeleteBucket(bucketChat); err != nil {
+			return err
+		}
+		_, err := tx.CreateBucket(bucketChat)
+		return err
 	})
 }

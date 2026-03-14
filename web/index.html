@@ -40,6 +40,9 @@
           <button class="tab" onclick="switchTab('settings', this)">Settings</button>
         </div>
         <div id="tab-runs" class="tab-content active">
+          <div style="display:flex;justify-content:flex-end;padding:8px 12px 0">
+            <button class="btn btn-secondary btn-sm" onclick="clearActivity()">Clear</button>
+          </div>
           <div id="ai-setup-nudge" class="onboarding-notice hidden">
             <strong>AI Assistant not set up</strong><br/>
             Add an Anthropic or OpenAI API key to enable natural language job creation.
@@ -53,6 +56,9 @@
           <div id="chat-onboarding" class="onboarding-notice hidden">
             <strong>AI Assistant not configured</strong><br/>
             Add your API key in the <a href="#" onclick="switchTabByName('settings')">Settings</a> tab to get started.
+          </div>
+          <div style="display:flex;justify-content:flex-end;padding:8px 12px 0">
+            <button class="btn btn-secondary btn-sm" onclick="clearChat()">Clear</button>
           </div>
           <div id="chat-messages" class="chat-messages"></div>
           <div class="chat-input-area">

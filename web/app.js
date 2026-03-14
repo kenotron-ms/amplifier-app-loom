@@ -7,6 +7,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadAll();
   setInterval(loadAll, 3000);
   loadSettings();
+  loadChatHistory();
   onTriggerTypeChange();
   onExecutorChange();
   document.getElementById('chat-input').addEventListener('keydown', e => {
@@ -306,6 +307,12 @@ async function loadRuns() {
   } catch {}
 }
 
+async function clearActivity() {
+  if (!confirm('Clear all activity history?')) return;
+  await api('DELETE', '/api/runs');
+  document.getElementById('runs-list').innerHTML = '<div class="empty">No activity yet.</div>';
+}
+
 function renderRuns(runs) {
   const container = document.getElementById('runs-list');
   if (!runs.length) {
@@ -322,18 +329,42 @@ function renderRunCard(run) {
   const color = colors[run.status] || 'var(--text2)';
   const when = run.endedAt ? timeAgo(run.endedAt) : 'running…';
   const duration = run.endedAt ? durationMs(new Date(run.startedAt), new Date(run.endedAt)) : '';
+  const hasOutput = run.output && run.output.trim().length > 0;
+  const outputId = `out-${run.id}`;
   return `
   <div class="run-card">
     <div class="run-status-icon" style="color:${color}">${icon}</div>
     <div class="run-info">
       <div class="run-job-name">${esc(run.jobName || run.jobId)}</div>
-      <div class="run-meta">${when}${duration ? ' · ' + duration : ''}${run.attempt > 1 ? ` · attempt ${run.attempt}` : ''}</div>
-      ${run.output ? `<div class="run-output">${esc(run.output.slice(-500))}</div>` : ''}
+      <div class="run-meta">${when}${duration ? ' · ' + duration : ''}${run.attempt > 1 ? ` · attempt ${run.attempt}` : ''}${hasOutput ? ` <a href="#" class="run-log-toggle" onclick="toggleRunLog('${outputId}',this);return false">logs</a>` : ''}</div>
+      ${hasOutput ? `<pre class="run-output hidden" id="${outputId}">${esc(run.output)}</pre>` : ''}
     </div>
   </div>`;
 }
 
+function toggleRunLog(id, link) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const hidden = el.classList.toggle('hidden');
+  link.textContent = hidden ? 'logs' : 'hide logs';
+}
+
 // ── Chat ──────────────────────────────────────────────────────────────────────
+
+async function loadChatHistory() {
+  try {
+    const msgs = await api('GET', '/api/chat/history');
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = '';
+    msgs.forEach(m => appendChatBubble(m.role, m.content));
+  } catch {}
+}
+
+async function clearChat() {
+  if (!confirm('Clear all chat history?')) return;
+  await api('DELETE', '/api/chat/history');
+  document.getElementById('chat-messages').innerHTML = '';
+}
 
 async function sendChat() {
   const input = document.getElementById('chat-input');

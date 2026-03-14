@@ -127,6 +127,15 @@ type JobRun struct {
 	Attempt   int        `json:"attempt"`
 }
 
+// ── Chat history ──────────────────────────────────────────────────────────────
+
+type ChatMessage struct {
+	ID        string    `json:"id"`
+	Role      string    `json:"role"` // "user" or "assistant"
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 // ── Daemon status ─────────────────────────────────────────────────────────────
 
 type DaemonStatus struct {
