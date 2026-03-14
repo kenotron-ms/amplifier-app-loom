@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 )
@@ -75,4 +76,40 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 	s.reinitNLClient()
 
 	s.getSettings(w, r)
+}
+
+func (s *Server) testSettings(w http.ResponseWriter, r *http.Request) {
+	client := s.getNLClient()
+	if client == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"ok":      false,
+			"message": "No API key configured. Add your key and save first.",
+		})
+		return
+	}
+
+	provider := s.cfg.AIProvider
+	if provider == "" {
+		provider = "anthropic"
+	}
+	model := s.cfg.AnthropicModel
+	if provider == "openai" {
+		model = s.cfg.OpenAIModel
+	}
+	if model == "" {
+		model = "default"
+	}
+
+	if err := client.Ping(r.Context()); err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"ok":      false,
+			"message": fmt.Sprintf("Connection failed: %v", err),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":      true,
+		"message": fmt.Sprintf("Connected to %s (%s)", provider, model),
+	})
 }

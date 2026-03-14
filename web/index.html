@@ -40,6 +40,13 @@
           <button class="tab" onclick="switchTab('settings', this)">Settings</button>
         </div>
         <div id="tab-runs" class="tab-content active">
+          <div id="ai-setup-nudge" class="onboarding-notice hidden">
+            <strong>AI Assistant not set up</strong><br/>
+            Add an Anthropic or OpenAI API key to enable natural language job creation.
+            <div style="margin-top:10px">
+              <button class="btn btn-primary btn-sm" onclick="switchTabByName('settings')">Configure AI Assistant →</button>
+            </div>
+          </div>
           <div id="runs-list" class="runs-list"><div class="loading">Loading…</div></div>
         </div>
         <div id="tab-chat" class="tab-content">
@@ -94,10 +101,12 @@
                 </select>
               </div>
             </div>
-            <div class="form-actions">
+            <div class="form-actions" style="gap:8px">
               <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+              <button class="btn btn-secondary" onclick="testConnection()">Test Connection</button>
             </div>
             <div id="settings-saved" class="hint" style="display:none;color:var(--green)">&#x2713; Saved</div>
+            <div id="settings-test-result" class="hint" style="display:none"></div>
           </div>
         </div>
       </section>

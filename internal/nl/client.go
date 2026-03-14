@@ -14,6 +14,7 @@ import (
 // NLClient is the interface for natural language chat clients.
 type NLClient interface {
 	Chat(ctx context.Context, message string) (string, []string, error)
+	Ping(ctx context.Context) error
 }
 
 const systemPrompt = `You are the agent-daemon assistant. You help users manage their scheduled jobs.
@@ -145,6 +146,16 @@ func (c *AnthropicClient) Chat(ctx context.Context, userMessage string) (string,
 	}
 
 	return finalText, actions, nil
+}
+
+// Ping verifies the API key by sending a minimal request.
+func (c *AnthropicClient) Ping(ctx context.Context) error {
+	_, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
+		Model:     c.model,
+		MaxTokens: 1,
+		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hi"))},
+	})
+	return err
 }
 
 // executeTool is a package-level function so both AnthropicClient and OpenAIClient can use it.

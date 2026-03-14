@@ -99,6 +99,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Settings
 	mux.HandleFunc("GET /api/settings", s.getSettings)
 	mux.HandleFunc("PUT /api/settings", s.updateSettings)
+	mux.HandleFunc("POST /api/settings/test", s.testSettings)
 
 	// Natural language chat
 	mux.HandleFunc("POST /api/chat", s.chat)

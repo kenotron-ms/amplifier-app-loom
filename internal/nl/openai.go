@@ -66,9 +66,10 @@ type oaiFuncDef struct {
 }
 
 type oaiRequest struct {
-	Model    string       `json:"model"`
-	Messages []oaiMessage `json:"messages"`
-	Tools    []oaiTool    `json:"tools,omitempty"`
+	Model     string       `json:"model"`
+	Messages  []oaiMessage `json:"messages"`
+	Tools     []oaiTool    `json:"tools,omitempty"`
+	MaxTokens int          `json:"max_tokens,omitempty"`
 }
 
 type oaiResponse struct {
@@ -185,6 +186,12 @@ func (c *OpenAIClient) callAPI(ctx context.Context, messages []oaiMessage, tools
 		return nil, fmt.Errorf("openai API: %s", resp.Error.Message)
 	}
 	return &resp, nil
+}
+
+// Ping verifies the API key by sending a minimal request.
+func (c *OpenAIClient) Ping(ctx context.Context) error {
+	_, err := c.callAPI(ctx, []oaiMessage{{Role: "user", Content: "hi"}}, nil)
+	return err
 }
 
 // ── Tool definitions for OpenAI ───────────────────────────────────────────────

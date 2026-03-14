@@ -417,9 +417,32 @@ async function saveSettings() {
 }
 
 function updateChatOnboarding(settings) {
-  const banner = document.getElementById('chat-onboarding');
-  if (!banner) return;
-  banner.classList.toggle('hidden', !!settings.aiConfigured);
+  const configured = !!settings.aiConfigured;
+  const chatBanner = document.getElementById('chat-onboarding');
+  if (chatBanner) chatBanner.classList.toggle('hidden', configured);
+  const nudge = document.getElementById('ai-setup-nudge');
+  if (nudge) nudge.classList.toggle('hidden', configured);
+}
+
+async function testConnection() {
+  const btn = event.target;
+  const result = document.getElementById('settings-test-result');
+  btn.disabled = true;
+  btn.textContent = 'Testing…';
+  result.style.display = 'none';
+  try {
+    const res = await api('POST', '/api/settings/test', {});
+    result.style.display = 'block';
+    result.style.color = res.ok ? 'var(--green)' : 'var(--red)';
+    result.textContent = (res.ok ? '✓ ' : '✗ ') + res.message;
+  } catch (err) {
+    result.style.display = 'block';
+    result.style.color = 'var(--red)';
+    result.textContent = '✗ ' + err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Test Connection';
+  }
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
