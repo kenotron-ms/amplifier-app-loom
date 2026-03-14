@@ -24,7 +24,7 @@ jobs:
             asset: agent-daemon-darwin-arm64
 
           - name: darwin-amd64
-            os: macos-13   # last Intel runner
+            os: macos-15-intel
             goos: darwin
             goarch: amd64
             cgo: "1"
