@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>agent-daemon</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="header-left">
+        <h1>agent-daemon</h1>
+        <div id="status-badge" class="badge badge-loading">connecting…</div>
+      </div>
+      <div class="header-right">
+        <span id="header-stats"></span>
+        <button id="btn-pause" class="btn btn-secondary" onclick="togglePause()">Pause</button>
+        <button class="btn btn-danger-outline" onclick="flushQueue()">Flush Queue</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Jobs</h2>
+          <button class="btn btn-primary btn-sm" onclick="openAddJobModal()">+ Add Job</button>
+        </div>
+        <div id="jobs-list" class="jobs-list"><div class="loading">Loading…</div></div>
+      </section>
+
+      <section class="panel-right">
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('runs', this)">Activity</button>
+          <button class="tab" onclick="switchTab('chat', this)">AI Assistant</button>
+        </div>
+        <div id="tab-runs" class="tab-content active">
+          <div id="runs-list" class="runs-list"><div class="loading">Loading…</div></div>
+        </div>
+        <div id="tab-chat" class="tab-content">
+          <div id="chat-messages" class="chat-messages"></div>
+          <div class="chat-input-area">
+            <textarea id="chat-input" placeholder='Try "every 5 minutes, ask claude code to check for lint errors in /my/project"' rows="3"></textarea>
+            <button class="btn btn-primary" onclick="sendChat()">Send</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Add/Edit Job Modal -->
+  <div id="modal-overlay" class="modal-overlay hidden" onclick="closeModal(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Add Job</h3>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <form id="job-form" onsubmit="submitJob(event)">
+        <input type="hidden" id="f-job-id" />
+
+        <!-- Core -->
+        <div class="form-group">
+          <label>Name *</label>
+          <input type="text" id="f-name" required placeholder="e.g. Daily lint check" />
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" id="f-description" placeholder="What does this job do?" />
+        </div>
+        <div class="form-group">
+          <label>Working Directory</label>
+          <input type="text" id="f-cwd" placeholder="/path/to/project" />
+        </div>
+
+        <!-- Trigger -->
+        <div class="form-group">
+          <label>Trigger *</label>
+          <div class="trigger-row">
+            <select id="f-trigger-type" onchange="onTriggerTypeChange()">
+              <option value="once">Once</option>
+              <option value="loop">Loop</option>
+              <option value="cron">Cron</option>
+            </select>
+            <input type="text" id="f-trigger-schedule" placeholder="e.g. 5m or 0 */5 * * * *" />
+          </div>
+          <div id="trigger-hint" class="hint"></div>
+        </div>
+
+        <!-- Executor -->
+        <div class="form-group">
+          <label>Executor *</label>
+          <select id="f-executor" onchange="onExecutorChange()">
+            <option value="shell">Shell command</option>
+            <option value="claude-code">Claude Code</option>
+            <option value="amplifier">Amplifier</option>
+          </select>
+        </div>
+
+        <!-- Shell fields -->
+        <div id="exec-shell">
+          <div class="form-group">
+            <label>Command *</label>
+            <input type="text" id="f-shell-command" placeholder="e.g. ./run-tests.sh" />
+          </div>
+        </div>
+
+        <!-- Claude Code fields -->
+        <div id="exec-claude-code" class="hidden">
+          <div class="form-group">
+            <label>Prompt *</label>
+            <textarea id="f-claude-prompt" rows="3" placeholder="e.g. Review the code for security issues and suggest fixes"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Follow-up steps <span class="hint-inline">(one per line, multi-turn)</span></label>
+            <textarea id="f-claude-steps" rows="2" placeholder="e.g. Now apply the fixes&#10;Run the tests"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Model</label>
+              <input type="text" id="f-claude-model" placeholder="sonnet, opus, claude-sonnet-4-6" />
+            </div>
+            <div class="form-group">
+              <label>Max turns</label>
+              <input type="number" id="f-claude-max-turns" min="1" max="50" placeholder="10" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Allowed tools <span class="hint-inline">(comma-separated)</span></label>
+            <input type="text" id="f-claude-tools" placeholder="Bash,Read,Edit" />
+          </div>
+        </div>
+
+        <!-- Amplifier fields -->
+        <div id="exec-amplifier" class="hidden">
+          <div class="form-group">
+            <label>Prompt <span class="hint-inline">(or use a recipe below)</span></label>
+            <textarea id="f-amp-prompt" rows="3" placeholder="e.g. Analyze the codebase for performance issues"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Follow-up steps <span class="hint-inline">(one per line, multi-turn)</span></label>
+            <textarea id="f-amp-steps" rows="2" placeholder="e.g. Now generate a report"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Recipe path <span class="hint-inline">(overrides prompt if set)</span></label>
+            <input type="text" id="f-amp-recipe" placeholder="/path/to/recipe.yaml" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Bundle</label>
+              <input type="text" id="f-amp-bundle" placeholder="foundation, recipes" />
+            </div>
+            <div class="form-group">
+              <label>Model</label>
+              <input type="text" id="f-amp-model" placeholder="claude-sonnet-4-6" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Common -->
+        <div class="form-row">
+          <div class="form-group">
+            <label>Timeout</label>
+            <input type="text" id="f-timeout" placeholder="5m, 30s" />
+          </div>
+          <div class="form-group">
+            <label>Max Retries</label>
+            <input type="number" id="f-retries" min="0" max="10" value="0" />
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

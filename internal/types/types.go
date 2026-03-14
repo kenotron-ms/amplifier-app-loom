@@ -1,0 +1,122 @@
+package types
+
+import "time"
+
+// ── Trigger ───────────────────────────────────────────────────────────────────
+
+type TriggerType string
+
+const (
+	TriggerLoop TriggerType = "loop" // repeating interval, e.g. "30s"
+	TriggerCron TriggerType = "cron" // standard cron expression
+	TriggerOnce TriggerType = "once" // run once after optional delay, then auto-disable
+)
+
+type Trigger struct {
+	Type     TriggerType `json:"type"`
+	Schedule string      `json:"schedule"` // cron expr OR Go duration string
+}
+
+// ── Executor ──────────────────────────────────────────────────────────────────
+
+type ExecutorType string
+
+const (
+	ExecutorShell      ExecutorType = "shell"       // run a shell command
+	ExecutorClaudeCode ExecutorType = "claude-code" // run via `claude -p`
+	ExecutorAmplifier  ExecutorType = "amplifier"   // run via `amplifier run` or recipe
+)
+
+// ShellConfig is the config for ExecutorShell.
+type ShellConfig struct {
+	Command string `json:"command"`
+}
+
+// ClaudeCodeConfig is the config for ExecutorClaudeCode.
+type ClaudeCodeConfig struct {
+	Prompt            string   `json:"prompt"`                      // first / only prompt
+	Steps             []string `json:"steps,omitempty"`             // additional turns (multi-step)
+	Model             string   `json:"model,omitempty"`             // e.g. "sonnet", "opus", "claude-sonnet-4-6"
+	MaxTurns          int      `json:"maxTurns,omitempty"`          // --max-turns
+	AllowedTools      []string `json:"allowedTools,omitempty"`      // --allowedTools
+	AppendSystemPrompt string  `json:"appendSystemPrompt,omitempty"` // --append-system-prompt
+}
+
+// AmplifierConfig is the config for ExecutorAmplifier.
+type AmplifierConfig struct {
+	Prompt     string            `json:"prompt,omitempty"`     // free-form prompt (amplifier run "...")
+	Steps      []string          `json:"steps,omitempty"`      // additional turns (multi-step)
+	RecipePath string            `json:"recipePath,omitempty"` // path to .yaml recipe file
+	Bundle     string            `json:"bundle,omitempty"`     // --bundle (e.g. "foundation", "recipes")
+	Model      string            `json:"model,omitempty"`      // -m flag
+	Context    map[string]string `json:"context,omitempty"`    // recipe context variables
+}
+
+// ── Job ───────────────────────────────────────────────────────────────────────
+
+type Job struct {
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
+	Trigger     Trigger      `json:"trigger"`
+	Executor    ExecutorType `json:"executor"` // "shell", "claude-code", "amplifier"
+	CWD         string       `json:"cwd"`
+	Enabled     bool         `json:"enabled"`
+	MaxRetries  int          `json:"maxRetries"`
+	Timeout     string       `json:"timeout"` // Go duration string, "" = no limit
+	CreatedAt   time.Time    `json:"createdAt"`
+	UpdatedAt   time.Time    `json:"updatedAt"`
+
+	// Executor configs — only the one matching Executor will be set.
+	Shell      *ShellConfig      `json:"shell,omitempty"`
+	ClaudeCode *ClaudeCodeConfig `json:"claudeCode,omitempty"`
+	Amplifier  *AmplifierConfig  `json:"amplifier,omitempty"`
+
+	// Deprecated: top-level Command kept for backward compat with existing DB entries.
+	Command string `json:"command,omitempty"`
+}
+
+// ResolvedExecutor returns the effective executor type, defaulting to shell.
+func (j *Job) ResolvedExecutor() ExecutorType {
+	if j.Executor == "" {
+		return ExecutorShell
+	}
+	return j.Executor
+}
+
+// ── Run ───────────────────────────────────────────────────────────────────────
+
+type RunStatus string
+
+const (
+	RunStatusPending RunStatus = "pending"
+	RunStatusRunning RunStatus = "running"
+	RunStatusSuccess RunStatus = "success"
+	RunStatusFailed  RunStatus = "failed"
+	RunStatusTimeout RunStatus = "timeout"
+	RunStatusSkipped RunStatus = "skipped"
+)
+
+type JobRun struct {
+	ID        string     `json:"id"`
+	JobID     string     `json:"jobId"`
+	JobName   string     `json:"jobName"`
+	StartedAt time.Time  `json:"startedAt"`
+	EndedAt   *time.Time `json:"endedAt,omitempty"`
+	Status    RunStatus  `json:"status"`
+	ExitCode  int        `json:"exitCode"`
+	Output    string     `json:"output"` // combined stdout+stderr (capped)
+	Attempt   int        `json:"attempt"`
+}
+
+// ── Daemon status ─────────────────────────────────────────────────────────────
+
+type DaemonStatus struct {
+	State      string    `json:"state"` // "running" | "paused" | "stopped"
+	PID        int       `json:"pid"`
+	StartedAt  time.Time `json:"startedAt"`
+	ActiveRuns int       `json:"activeRuns"`
+	QueueDepth int       `json:"queueDepth"`
+	JobCount   int       `json:"jobCount"`
+	Version    string    `json:"version"`
+}
