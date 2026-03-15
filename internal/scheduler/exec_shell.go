@@ -1,16 +1,20 @@
 package scheduler
 
 import (
-	"bytes"
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
+	"sync"
 
 	"github.com/ms/agent-daemon/internal/types"
 )
 
-func execShell(ctx context.Context, job *types.Job) (output string, exitCode int, err error) {
+const cap64 = 64 * 1024 // 64KB accumulator cap
+
+func execShell(ctx context.Context, job *types.Job, b *Broadcaster, runID string) (output string, exitCode int, err error) {
 	// Resolve command: prefer Shell config, fall back to top-level Command field.
 	command := job.Command
 	if job.Shell != nil && job.Shell.Command != "" {
@@ -34,16 +38,71 @@ func execShell(ctx context.Context, job *types.Job) (output string, exitCode int
 		cmd.Env = env
 	}
 
-	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
+	return streamCommand(cmd, b, runID)
+}
 
-	err = cmd.Run()
-	output = buf.String()
+// streamCommand runs cmd, streaming output chunks to b while accumulating up
+// to cap64 bytes for the returned output string. It is shared by all executors.
+func streamCommand(cmd *exec.Cmd, b *Broadcaster, runID string) (output string, exitCode int, err error) {
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", -1, err
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return "", -1, err
+	}
+
+	if err = cmd.Start(); err != nil {
+		return "", -1, err
+	}
+
+	var (
+		mu  sync.Mutex
+		acc strings.Builder
+		wg  sync.WaitGroup
+	)
+
+	readPipe := func(r io.Reader) {
+		defer wg.Done()
+		buf := make([]byte, 4096)
+		for {
+			n, readErr := r.Read(buf)
+			if n > 0 {
+				chunk := string(buf[:n])
+				// Always broadcast uncapped.
+				b.Write(runID, chunk)
+				// Accumulate up to cap64 bytes.
+				mu.Lock()
+				remaining := cap64 - acc.Len()
+				if remaining > 0 {
+					if n > remaining {
+						acc.WriteString(chunk[:remaining])
+					} else {
+						acc.WriteString(chunk)
+					}
+				}
+				mu.Unlock()
+			}
+			if readErr != nil {
+				break
+			}
+		}
+	}
+
+	wg.Add(2)
+	go readPipe(stdoutPipe)
+	go readPipe(stderrPipe)
+
+	wg.Wait()
+
+	waitErr := cmd.Wait()
+
 	if cmd.ProcessState != nil {
 		exitCode = cmd.ProcessState.ExitCode()
-	} else if err != nil {
+	} else if waitErr != nil {
 		exitCode = -1
 	}
-	return
+
+	return acc.String(), exitCode, waitErr
 }

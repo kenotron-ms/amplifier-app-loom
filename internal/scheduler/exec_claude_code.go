@@ -12,7 +12,7 @@ import (
 	"github.com/ms/agent-daemon/internal/types"
 )
 
-func execClaudeCode(ctx context.Context, job *types.Job) (output string, exitCode int, err error) {
+func execClaudeCode(ctx context.Context, job *types.Job, b *Broadcaster, runID string) (output string, exitCode int, err error) {
 	cfg := job.ClaudeCode
 	if cfg == nil || cfg.Prompt == "" {
 		return "", -1, fmt.Errorf("claude-code executor requires a prompt")

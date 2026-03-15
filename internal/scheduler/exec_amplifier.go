@@ -11,7 +11,7 @@ import (
 	"github.com/ms/agent-daemon/internal/types"
 )
 
-func execAmplifier(ctx context.Context, job *types.Job) (output string, exitCode int, err error) {
+func execAmplifier(ctx context.Context, job *types.Job, b *Broadcaster, runID string) (output string, exitCode int, err error) {
 	cfg := job.Amplifier
 	if cfg == nil {
 		return "", -1, fmt.Errorf("amplifier executor requires config")
