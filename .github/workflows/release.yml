@@ -141,7 +141,9 @@ jobs:
           merge-multiple: true
 
       - name: Make binaries executable
-        run: chmod +x dist/agent-daemon-darwin-* dist/agent-daemon-linux-*
+        run: |
+          chmod +x dist/agent-daemon-linux-amd64 dist/agent-daemon-linux-arm64
+          chmod +x dist/agent-daemon-darwin-arm64 dist/agent-daemon-darwin-amd64
 
       - name: Generate checksums
         working-directory: dist
@@ -177,6 +179,8 @@ jobs:
             - All builds include the web UI at `http://localhost:7700`
             - Configure your AI provider (Anthropic / OpenAI) from the Settings tab in the UI
           files: |
+            dist/agent-daemon-darwin-arm64
+            dist/agent-daemon-darwin-amd64
             dist/agent-daemon-darwin-arm64.dmg
             dist/agent-daemon-darwin-amd64.dmg
             dist/agent-daemon-linux-amd64

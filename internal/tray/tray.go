@@ -16,7 +16,9 @@ import (
 	"fyne.io/systray"
 	"github.com/kardianos/service"
 
+	"github.com/ms/agent-daemon/internal/api"
 	internalsvc "github.com/ms/agent-daemon/internal/service"
+	"github.com/ms/agent-daemon/internal/updater"
 )
 
 // Run launches the system tray app. Blocks until the user quits.
@@ -70,6 +72,8 @@ func onReady(port int) {
 	mUninstall := systray.AddMenuItem("Uninstall", "Remove installed service")
 
 	systray.AddSeparator()
+	mUpdateAvail := systray.AddMenuItem("", "")
+	mUpdateAvail.Hide()
 	mQuit := systray.AddMenuItem("Quit Tray", "Close the tray app (daemon keeps running)")
 
 	// ── Background tasks ──────────────────────────────────────────────────────
@@ -80,6 +84,17 @@ func onReady(port int) {
 		for {
 			updateStatus(port, mStatus, mDetails, mStart, mStop, mPause, mResume)
 			time.Sleep(2 * time.Second)
+		}
+	}()
+
+	// Check for updates once, shortly after launch.
+	go func() {
+		time.Sleep(5 * time.Second)
+		latest, _, err := updater.LatestRelease()
+		if err == nil && updater.IsNewer(api.Version, latest) {
+			mUpdateAvail.SetTitle(fmt.Sprintf("Update available: v%s", latest))
+			mUpdateAvail.SetTooltip("Run: agent-daemon update")
+			mUpdateAvail.Show()
 		}
 	}()
 
@@ -120,6 +135,9 @@ func onReady(port int) {
 
 		case <-mUninstall.ClickedCh:
 			uninstallService()
+
+		case <-mUpdateAvail.ClickedCh:
+			openBrowser("https://github.com/kenotron-ms/agent-daemon/releases/latest")
 
 		case <-mQuit.ClickedCh:
 			systray.Quit()
