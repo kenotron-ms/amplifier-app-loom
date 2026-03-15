@@ -14,11 +14,12 @@ import (
 const maxOutputBytes = 64 * 1024 // 64KB cap on stored output
 
 type Runner struct {
-	store store.Store
+	store       store.Store
+	broadcaster *Broadcaster
 }
 
-func NewRunner(s store.Store) *Runner {
-	return &Runner{store: s}
+func NewRunner(s store.Store, b *Broadcaster) *Runner {
+	return &Runner{store: s, broadcaster: b}
 }
 
 // Execute dispatches to the correct executor based on job type.
@@ -63,6 +64,9 @@ func (r *Runner) runAttempt(job *types.Job, attempt int) (stopRetrying bool) {
 	}
 	_ = r.store.SaveRun(context.Background(), run)
 
+	r.broadcaster.Register(run.ID)
+	defer r.broadcaster.Complete(run.ID)
+
 	slog.Info("job starting", "job", job.Name, "executor", job.ResolvedExecutor(), "attempt", attempt)
 
 	var output string
@@ -71,11 +75,11 @@ func (r *Runner) runAttempt(job *types.Job, attempt int) (stopRetrying bool) {
 
 	switch job.ResolvedExecutor() {
 	case types.ExecutorClaudeCode:
-		output, exitCode, runErr = execClaudeCode(ctx, job)
+		output, exitCode, runErr = execClaudeCode(ctx, job, r.broadcaster, run.ID)
 	case types.ExecutorAmplifier:
-		output, exitCode, runErr = execAmplifier(ctx, job)
+		output, exitCode, runErr = execAmplifier(ctx, job, r.broadcaster, run.ID)
 	default: // ExecutorShell + backward compat
-		output, exitCode, runErr = execShell(ctx, job)
+		output, exitCode, runErr = execShell(ctx, job, r.broadcaster, run.ID)
 	}
 
 	now := time.Now()
