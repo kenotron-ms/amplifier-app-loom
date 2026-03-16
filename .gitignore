@@ -17,3 +17,7 @@ vendor/
 keys.env
 packaging/macos/setup-github-secrets.sh
 .superpowers/
+
+# Git worktrees (isolated feature branch directories)
+# Prevents accidentally committing worktree contents to the repository
+.worktrees/
