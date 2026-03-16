@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"io"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -14,7 +15,6 @@ import (
 const cap64 = 64 * 1024 // 64KB accumulator cap
 
 func (r *Runner) execShell(ctx context.Context, job *types.Job, runID string) (output string, exitCode int, err error) {
-	// Resolve command: prefer Shell config, fall back to top-level Command field.
 	command := job.Command
 	if job.Shell != nil && job.Shell.Command != "" {
 		command = job.Shell.Command
@@ -24,14 +24,27 @@ func (r *Runner) execShell(ctx context.Context, job *types.Job, runID string) (o
 	if runtime.GOOS == "windows" {
 		cmd = exec.CommandContext(ctx, "cmd", "/C", command)
 	} else {
-		cmd = exec.CommandContext(ctx, "sh", "-c", command)
+		// Run through the user's login+interactive shell so the script gets
+		// the same PATH and environment the user has in their terminal.
+		cmd = exec.CommandContext(ctx, r.userShell(), "-l", "-i", "-c", command)
 	}
+
 	if job.CWD != "" {
 		cmd.Dir = job.CWD
 	}
 
-	// Start with the user's base env, then overlay any job-specific vars on top.
-	env := r.baseEnv()
+	// Set HOME so shell init scripts find ~/.zshrc, ~/.nvm, etc.
+	// Job-specific RuntimeEnv is overlaid on top.
+	home := r.userHome()
+	env := os.Environ()
+	if home != "" {
+		for i, e := range env {
+			if strings.HasPrefix(e, "HOME=") {
+				env[i] = "HOME=" + home
+				break
+			}
+		}
+	}
 	for k, v := range job.RuntimeEnv {
 		env = append(env, k+"="+v)
 	}
@@ -69,9 +82,7 @@ func streamCommand(cmd *exec.Cmd, b *Broadcaster, runID string) (output string, 
 			n, readErr := r.Read(buf)
 			if n > 0 {
 				chunk := string(buf[:n])
-				// Always broadcast uncapped.
 				b.Write(runID, chunk)
-				// Accumulate up to cap64 bytes.
 				mu.Lock()
 				remaining := cap64 - acc.Len()
 				if remaining > 0 {
@@ -105,5 +116,3 @@ func streamCommand(cmd *exec.Cmd, b *Broadcaster, runID string) (output string, 
 
 	return acc.String(), exitCode, waitErr
 }
-
-
