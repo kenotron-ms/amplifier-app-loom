@@ -452,13 +452,14 @@ function copyLog(runId) {
 }
 
 function openLiveLog(runId) {
-  const pre    = document.getElementById(`logout-${runId}`);
-  const cursor = document.getElementById(`cursor-${runId}`);
+  const pre = document.getElementById(`logout-${runId}`);
   if (!pre) return;
+  const cursor = document.getElementById(`cursor-${runId}`);
   const src = new EventSource(`/api/runs/${runId}/stream`);
   liveSources[runId] = src;
   src.onmessage = e => {
-    const d = JSON.parse(e.data);
+    let d;
+    try { d = JSON.parse(e.data); } catch { return; }
     if (!d.chunk) return;
     const atBottom = pre.scrollHeight - pre.scrollTop <= pre.clientHeight + 4;
     pre.insertBefore(document.createTextNode(d.chunk), cursor);
@@ -467,7 +468,8 @@ function openLiveLog(runId) {
   src.addEventListener('done', e => {
     src.close();
     delete liveSources[runId];
-    const payload = JSON.parse(e.data);
+    let payload;
+    try { payload = JSON.parse(e.data); } catch { payload = {}; }
     finalizeRunCard(runId, payload.status || 'failed', payload.started_at, payload.ended_at);
   });
   src.onerror = () => {
@@ -479,7 +481,8 @@ function openLiveLog(runId) {
 }
 
 function finalizeRunCard(runId, status, startedAt, endedAt) {
-  document.getElementById(`run-${runId}`)?.classList.remove('live');
+  const cardEl = document.getElementById(`run-${runId}`);
+  cardEl?.classList.remove('live');
   const iconEl = document.getElementById(`status-icon-${runId}`);
   if (iconEl) {
     iconEl.textContent = status === 'success' ? '✓' : '✗';
@@ -490,7 +493,7 @@ function finalizeRunCard(runId, status, startedAt, endedAt) {
   if (labelEl) labelEl.textContent = 'stdout + stderr';
   document.getElementById(`cursor-${runId}`)?.remove();
   if (status !== 'success') {
-    document.getElementById(`run-${runId}`)?.classList.add('run-failed');
+    cardEl?.classList.add('run-failed');
   }
   if (startedAt && endedAt) {
     const timeEl = document.getElementById(`run-time-${runId}`);
