@@ -4,49 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/ms/agent-daemon/internal/types"
 )
 
-// resolveAmplifierBinary returns the absolute path to the amplifier binary.
-// exec.Command resolves the binary via LookPath at creation time using the
-// daemon's inherited PATH — which under launchd omits ~/.local/bin and other
-// user locations. We search those directories explicitly as a fallback.
-func resolveAmplifierBinary() (string, error) {
-	// Fast path: already on the daemon's PATH.
-	if p, err := exec.LookPath("amplifier"); err == nil {
-		return p, nil
-	}
-
-	// Slow path: check common user-install locations.
-	home, _ := os.UserHomeDir()
-	candidates := []string{
-		filepath.Join(home, ".local", "bin", "amplifier"),
-		"/usr/local/bin/amplifier",
-		"/opt/homebrew/bin/amplifier",
-	}
-	for _, c := range candidates {
-		if info, err := os.Stat(c); err == nil && !info.IsDir() {
-			return c, nil
-		}
-	}
-	return "", fmt.Errorf("amplifier binary not found in PATH or common locations (%s)",
-		strings.Join(candidates, ", "))
-}
-
 // amplifierCmd builds an exec.Cmd for the amplifier binary, resolving its
-// absolute path so the command works even when the daemon's inherited PATH
-// (e.g. under launchd) does not include the user's bin directories.
+// absolute path via resolveBinary so it works even when the daemon's inherited
+// PATH (e.g. under launchd) omits user bin directories.
 func amplifierCmd(ctx context.Context, args ...string) *exec.Cmd {
-	bin, err := resolveAmplifierBinary()
+	bin, err := resolveBinary("amplifier")
 	if err != nil {
-		// Return a cmd that will fail with a clear message on Start().
-		cmd := exec.CommandContext(ctx, "amplifier", args...)
-		return cmd
+		return exec.CommandContext(ctx, "amplifier", args...)
 	}
 	return exec.CommandContext(ctx, bin, args...)
 }

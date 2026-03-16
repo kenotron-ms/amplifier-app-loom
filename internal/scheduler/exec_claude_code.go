@@ -23,7 +23,11 @@ func execClaudeCode(ctx context.Context, job *types.Job, b *Broadcaster, runID s
 
 	for i, step := range steps {
 		args := buildClaudeArgs(cfg, step, sessionID)
-		cmd := exec.CommandContext(ctx, "claude", args...)
+		bin, _ := resolveBinary("claude")
+		if bin == "" {
+			bin = "claude"
+		}
+		cmd := exec.CommandContext(ctx, bin, args...)
 		if job.CWD != "" {
 			cmd.Dir = job.CWD
 		}

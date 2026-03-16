@@ -2,15 +2,42 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 
 	"github.com/ms/agent-daemon/internal/types"
 )
+
+// resolveBinary returns the absolute path to a named binary. When the daemon
+// runs as a launchd service it inherits a minimal PATH that omits user install
+// locations like ~/.local/bin, so exec.LookPath alone is not sufficient.
+func resolveBinary(name string) (string, error) {
+	// Fast path: already on the daemon's PATH.
+	if p, err := exec.LookPath(name); err == nil {
+		return p, nil
+	}
+
+	// Slow path: check common user-install locations.
+	home, _ := os.UserHomeDir()
+	candidates := []string{
+		filepath.Join(home, ".local", "bin", name),
+		"/usr/local/bin/" + name,
+		"/opt/homebrew/bin/" + name,
+	}
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && !info.IsDir() {
+			return c, nil
+		}
+	}
+	return "", fmt.Errorf("%s binary not found in PATH or common locations (%s)",
+		name, strings.Join(candidates, ", "))
+}
 
 const cap64 = 64 * 1024 // 64KB accumulator cap
 
