@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/user"
+	"runtime"
+	"strings"
 
 	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
@@ -148,26 +151,69 @@ var serveCmd = &cobra.Command{
 }
 
 // captureUserContext records the identity of the installing user so the daemon
-// can recreate a proper shell environment when spawning jobs — even under
-// launchd/systemd where $HOME, $SHELL, and $PATH are stripped to bare minimums.
-// This must be called during `install`, not at daemon startup, because that's
-// the one moment we're guaranteed to be running in the user's interactive session.
+// can recreate a proper shell environment when spawning jobs.
+//
+// For user-level installs this is simply the current process user.
+// For system-level installs (sudo), $SUDO_USER identifies the real person who
+// ran sudo — we always want that user, not root, because amplifier/claude auth
+// tokens and configs live under their home directory.
 func captureUserContext() *config.UserContext {
-	u, err := user.Current()
-	if err != nil {
+	var u *user.User
+	var err error
+
+	// Prefer the real invoking user when running under sudo.
+	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" {
+		u, err = user.Lookup(sudoUser)
+	}
+	if u == nil {
+		u, err = user.Current()
+	}
+	if err != nil || u == nil {
 		return nil
 	}
-	home, _ := os.UserHomeDir()
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/zsh"
-	}
+
 	return &config.UserContext{
-		HomeDir:  home,
+		HomeDir:  u.HomeDir,
 		Username: u.Username,
-		Shell:    shell,
+		Shell:    lookupUserShell(u.Username),
 		UID:      u.Uid,
 	}
+}
+
+// lookupUserShell returns the login shell for username.
+// On macOS it queries Directory Services; on other platforms it parses
+// /etc/passwd. Falls back to /bin/zsh (macOS) or /bin/bash (Linux).
+func lookupUserShell(username string) string {
+	if runtime.GOOS == "darwin" {
+		out, err := exec.Command("dscl", ".", "-read",
+			"/Users/"+username, "UserShell").Output()
+		if err == nil {
+			// Output: "UserShell: /bin/zsh\n"
+			for _, line := range strings.Split(string(out), "\n") {
+				if strings.HasPrefix(line, "UserShell:") {
+					if parts := strings.Fields(line); len(parts) >= 2 {
+						return parts[1]
+					}
+				}
+			}
+		}
+	}
+
+	// Linux / fallback: parse /etc/passwd
+	// Format: username:password:uid:gid:gecos:home:shell
+	if data, err := os.ReadFile("/etc/passwd"); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			fields := strings.Split(line, ":")
+			if len(fields) >= 7 && fields[0] == username {
+				return fields[6]
+			}
+		}
+	}
+
+	if runtime.GOOS == "darwin" {
+		return "/bin/zsh"
+	}
+	return "/bin/bash"
 }
 
 func init() {
