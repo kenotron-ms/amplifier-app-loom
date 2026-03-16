@@ -154,9 +154,10 @@ header h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; color: var
 /* Runs list */
 .runs-list { flex: 1; overflow-y: auto; padding: 8px; }
 .run-card {
-  display: flex; align-items: flex-start; gap: 10px;
+  display: block;
   background: var(--bg2); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 10px 12px; margin-bottom: 4px;
+  border-radius: var(--radius); padding: 0; margin-bottom: 4px;
+  overflow: hidden;
 }
 .run-status-icon { font-size: 14px; flex-shrink: 0; padding-top: 1px; }
 .run-info { flex: 1; min-width: 0; }
@@ -319,4 +320,67 @@ header h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; color: var
   color: var(--accent);
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ── Run card v2 ──────────────────────────────────────────────────────────── */
+.run-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+}
+.run-name {
+  font-weight: 600; font-size: 13px; flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.run-time {
+  font-size: 11px; color: var(--text2); white-space: nowrap; flex-shrink: 0;
+}
+.log-toggle {
+  font-size: 11px; color: var(--accent); text-decoration: none;
+  flex-shrink: 0; white-space: nowrap;
+}
+.log-toggle:hover { text-decoration: underline; }
+.run-card.live {
+  border-color: #1a3a5c;
+  box-shadow: 0 0 0 1px rgba(33,150,243,0.2);
+}
+.run-card.run-failed {
+  border-left: 3px solid var(--red);
+}
+
+/* ── Log panel ────────────────────────────────────────────────────────────── */
+.log-panel {
+  border-top: 1px solid #222;
+}
+.log-panel.hidden { display: none; }
+.log-toolbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 12px; background: #111827;
+}
+.log-label {
+  color: #555; font-size: 11px; font-family: monospace;
+}
+.log-copy-btn {
+  background: none; border: none; color: #4a9eff;
+  font-size: 11px; cursor: pointer;
+}
+.log-copy-btn:hover { text-decoration: underline; }
+.log-output {
+  margin: 0; padding: 12px;
+  background: #0d1117; color: #c9d1d9;
+  font-size: 11px; font-family: monospace; line-height: 1.5;
+  max-height: 240px; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-all;
+}
+
+/* ── Live badge ───────────────────────────────────────────────────────────── */
+.live-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  color: #2196F3; font-size: 11px; flex-shrink: 0;
+}
+
+/* ── Blinking cursor ──────────────────────────────────────────────────────── */
+.log-cursor { animation: blink 1s step-end infinite; }
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
