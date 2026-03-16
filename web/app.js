@@ -451,6 +451,53 @@ function copyLog(runId) {
   navigator.clipboard.writeText(text).catch(() => {});
 }
 
+function openLiveLog(runId) {
+  const pre    = document.getElementById(`logout-${runId}`);
+  const cursor = document.getElementById(`cursor-${runId}`);
+  if (!pre) return;
+  const src = new EventSource(`/api/runs/${runId}/stream`);
+  liveSources[runId] = src;
+  src.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (!d.chunk) return;
+    const atBottom = pre.scrollHeight - pre.scrollTop <= pre.clientHeight + 4;
+    pre.insertBefore(document.createTextNode(d.chunk), cursor);
+    if (atBottom) pre.scrollTop = pre.scrollHeight;
+  };
+  src.addEventListener('done', e => {
+    src.close();
+    delete liveSources[runId];
+    const payload = JSON.parse(e.data);
+    finalizeRunCard(runId, payload.status || 'failed', payload.started_at, payload.ended_at);
+  });
+  src.onerror = () => {
+    src.close();
+    delete liveSources[runId];
+    failedSources.add(runId);
+    finalizeRunCard(runId, 'failed');
+  };
+}
+
+function finalizeRunCard(runId, status, startedAt, endedAt) {
+  document.getElementById(`run-${runId}`)?.classList.remove('live');
+  const iconEl = document.getElementById(`status-icon-${runId}`);
+  if (iconEl) {
+    iconEl.textContent = status === 'success' ? '✓' : '✗';
+    iconEl.style.color = status === 'success' ? 'var(--green)' : 'var(--red)';
+  }
+  document.getElementById(`live-badge-${runId}`)?.remove();
+  const labelEl = document.getElementById(`log-label-${runId}`);
+  if (labelEl) labelEl.textContent = 'stdout + stderr';
+  document.getElementById(`cursor-${runId}`)?.remove();
+  if (status !== 'success') {
+    document.getElementById(`run-${runId}`)?.classList.add('run-failed');
+  }
+  if (startedAt && endedAt) {
+    const timeEl = document.getElementById(`run-time-${runId}`);
+    if (timeEl) timeEl.textContent = `${timeAgo(startedAt)} · ${durationMs(new Date(startedAt), new Date(endedAt))}`;
+  }
+}
+
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
 async function loadChatHistory() {

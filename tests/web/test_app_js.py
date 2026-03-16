@@ -375,3 +375,194 @@ class TestIncrementalLoadRuns:
         """loadRuns must sync status icon for non-live completed cards."""
         assert re.search(r"getElementById\s*\(\s*[`'\"]status-icon-\$\{run\.id\}", js_text), \
             "loadRuns must update status icon via getElementById('status-icon-${run.id}')"
+
+
+# ---------------------------------------------------------------------------
+# Task 4: openLiveLog — SSE subscription
+# ---------------------------------------------------------------------------
+
+class TestOpenLiveLog:
+    def test_openLiveLog_exists(self, js_text):
+        """openLiveLog function must be defined."""
+        assert re.search(r'function\s+openLiveLog\s*\(', js_text), \
+            "openLiveLog function must be defined"
+
+    def test_openLiveLog_gets_pre_by_logout_id(self, js_text):
+        """openLiveLog must get pre element by 'logout-${runId}'."""
+        assert re.search(r'getElementById\s*\(\s*[`\'"]\s*logout-\$\{runId\}', js_text), \
+            "openLiveLog must get pre via getElementById('logout-${runId}')"
+
+    def test_openLiveLog_gets_cursor_by_id(self, js_text):
+        """openLiveLog must get cursor element by 'cursor-${runId}'."""
+        assert re.search(r'getElementById\s*\(\s*[`\'"]\s*cursor-\$\{runId\}', js_text), \
+            "openLiveLog must get cursor via getElementById('cursor-${runId}')"
+
+    def test_openLiveLog_returns_if_no_pre(self, js_text):
+        """openLiveLog must return early if pre element not found."""
+        assert re.search(r'if\s*\(\s*!pre\s*\)\s*return', js_text), \
+            "openLiveLog must guard with 'if (!pre) return'"
+
+    def test_openLiveLog_creates_eventsource(self, js_text):
+        """openLiveLog must create an EventSource."""
+        assert 'new EventSource(' in js_text, \
+            "openLiveLog must create a new EventSource"
+
+    def test_openLiveLog_eventsource_url(self, js_text):
+        """openLiveLog EventSource URL must be /api/runs/${runId}/stream."""
+        assert re.search(r'EventSource\s*\(\s*`[^`]*api/runs/\$\{runId\}/stream', js_text), \
+            "openLiveLog must use /api/runs/${runId}/stream as SSE URL"
+
+    def test_openLiveLog_stores_in_liveSources(self, js_text):
+        """openLiveLog must store the EventSource in liveSources[runId]."""
+        assert re.search(r'liveSources\s*\[\s*runId\s*\]\s*=\s*src', js_text), \
+            "openLiveLog must store EventSource as liveSources[runId] = src"
+
+    def test_openLiveLog_onmessage_parses_json(self, js_text):
+        """openLiveLog onmessage must parse e.data as JSON."""
+        assert re.search(r'JSON\.parse\s*\(\s*e\.data\s*\)', js_text), \
+            "openLiveLog onmessage must use JSON.parse(e.data)"
+
+    def test_openLiveLog_onmessage_guards_chunk(self, js_text):
+        """openLiveLog onmessage must return early if no chunk."""
+        assert re.search(r'if\s*\(\s*!d\.chunk\s*\)\s*return', js_text), \
+            "openLiveLog onmessage must guard with 'if (!d.chunk) return'"
+
+    def test_openLiveLog_onmessage_scroll_threshold(self, js_text):
+        """openLiveLog onmessage scroll-bottom check must use threshold of 4."""
+        assert re.search(r'clientHeight\s*\+\s*4', js_text), \
+            "openLiveLog scroll check must use clientHeight + 4 threshold"
+
+    def test_openLiveLog_onmessage_inserts_text_node(self, js_text):
+        """openLiveLog onmessage must insert a text node via createTextNode."""
+        assert 'document.createTextNode(d.chunk)' in js_text, \
+            "openLiveLog must create text node with document.createTextNode(d.chunk)"
+
+    def test_openLiveLog_onmessage_inserts_before_cursor(self, js_text):
+        """openLiveLog onmessage must insert text node before cursor using insertBefore."""
+        assert re.search(
+            r'insertBefore\s*\(\s*document\.createTextNode\s*\(\s*d\.chunk\s*\)\s*,\s*cursor\s*\)',
+            js_text
+        ), \
+            "openLiveLog must call pre.insertBefore(document.createTextNode(d.chunk), cursor)"
+
+    def test_openLiveLog_listens_for_done_event(self, js_text):
+        """openLiveLog must use addEventListener('done', ...) for completion."""
+        assert re.search(r"addEventListener\s*\(\s*['\"]done['\"]", js_text), \
+            "openLiveLog must listen for 'done' SSE event via addEventListener"
+
+    def test_openLiveLog_done_closes_source(self, js_text):
+        """openLiveLog done/error handler must close the EventSource."""
+        assert re.search(r'src\.close\s*\(\s*\)', js_text), \
+            "openLiveLog done/error handler must call src.close()"
+
+    def test_openLiveLog_done_deletes_from_liveSources(self, js_text):
+        """openLiveLog done handler must delete runId from liveSources."""
+        assert re.search(r'delete\s+liveSources\s*\[\s*runId\s*\]', js_text), \
+            "openLiveLog must delete liveSources[runId] on done/error"
+
+    def test_openLiveLog_done_calls_finalizeRunCard(self, js_text):
+        """openLiveLog done handler must call finalizeRunCard."""
+        assert re.search(r'finalizeRunCard\s*\(\s*runId', js_text), \
+            "openLiveLog done handler must call finalizeRunCard(runId, ...)"
+
+    def test_openLiveLog_done_uses_snake_case_timestamps(self, js_text):
+        """openLiveLog done handler must use snake_case payload.started_at and payload.ended_at."""
+        assert 'payload.started_at' in js_text and 'payload.ended_at' in js_text, \
+            "openLiveLog done handler must use snake_case payload.started_at and payload.ended_at"
+
+    def test_openLiveLog_done_uses_status_or_failed(self, js_text):
+        """openLiveLog done handler must use payload.status || 'failed' as fallback."""
+        assert re.search(r"payload\.status\s*\|\|\s*['\"]failed['\"]", js_text), \
+            "openLiveLog done handler must use payload.status || 'failed'"
+
+    def test_openLiveLog_onerror_adds_to_failedSources(self, js_text):
+        """openLiveLog onerror must add runId to failedSources."""
+        assert re.search(r'failedSources\s*\.add\s*\(\s*runId\s*\)', js_text), \
+            "openLiveLog onerror must call failedSources.add(runId)"
+
+    def test_openLiveLog_onerror_calls_finalizeRunCard_failed(self, js_text):
+        """openLiveLog onerror must call finalizeRunCard(runId, 'failed')."""
+        assert re.search(r"finalizeRunCard\s*\(\s*runId\s*,\s*['\"]failed['\"]", js_text), \
+            "openLiveLog onerror must call finalizeRunCard(runId, 'failed')"
+
+
+# ---------------------------------------------------------------------------
+# Task 4: finalizeRunCard — card state transition
+# ---------------------------------------------------------------------------
+
+class TestFinalizeRunCard:
+    def test_finalizeRunCard_exists(self, js_text):
+        """finalizeRunCard function must be defined."""
+        assert re.search(r'function\s+finalizeRunCard\s*\(', js_text), \
+            "finalizeRunCard function must be defined"
+
+    def test_finalizeRunCard_uses_optional_chaining(self, js_text):
+        """finalizeRunCard must use optional chaining (?.) for null safety."""
+        # Verify ?. appears in the finalizeRunCard function body
+        match = re.search(r'function\s+finalizeRunCard\s*\(', js_text)
+        assert match, "finalizeRunCard must be defined"
+        fn_body = js_text[match.start():match.start() + 800]
+        assert '?.' in fn_body, \
+            "finalizeRunCard must use optional chaining (?.) for double-call safety"
+
+    def test_finalizeRunCard_removes_live_class(self, js_text):
+        """finalizeRunCard must remove 'live' class from run-${runId} card."""
+        assert re.search(r"getElementById\s*\(`run-\$\{runId\}`\)", js_text) or \
+               re.search(r"getElementById\s*\(`run-\$\{runId\}`\)\?\.classList\.remove", js_text) or \
+               re.search(r"classList\.remove\s*\(\s*['\"]live['\"]", js_text), \
+            "finalizeRunCard must remove 'live' class from run-${runId} card"
+
+    def test_finalizeRunCard_updates_status_icon_id(self, js_text):
+        """finalizeRunCard must update status icon by id 'status-icon-${runId}'."""
+        assert re.search(r'getElementById\s*\(\s*`status-icon-\$\{runId\}`', js_text), \
+            "finalizeRunCard must get status icon via getElementById('status-icon-${runId}')"
+
+    def test_finalizeRunCard_ternary_on_success(self, js_text):
+        """finalizeRunCard must ternary on status === 'success' for icon/color."""
+        assert re.search(r"status\s*===\s*['\"]success['\"]\s*\?", js_text), \
+            "finalizeRunCard must ternary on status === 'success' for icon/color"
+
+    def test_finalizeRunCard_removes_live_badge(self, js_text):
+        """finalizeRunCard must remove the live badge element."""
+        assert re.search(r'getElementById\s*\(\s*`live-badge-\$\{runId\}`', js_text), \
+            "finalizeRunCard must get live-badge element by id live-badge-${runId}"
+
+    def test_finalizeRunCard_changes_label_to_stdout_stderr(self, js_text):
+        """finalizeRunCard must change log label to 'stdout + stderr'."""
+        assert 'stdout + stderr' in js_text, \
+            "finalizeRunCard must set log label to 'stdout + stderr'"
+
+    def test_finalizeRunCard_gets_log_label_by_id(self, js_text):
+        """finalizeRunCard must get log label by id 'log-label-${runId}'."""
+        assert re.search(r'getElementById\s*\(\s*`log-label-\$\{runId\}`', js_text), \
+            "finalizeRunCard must get log label via getElementById('log-label-${runId}')"
+
+    def test_finalizeRunCard_removes_cursor(self, js_text):
+        """finalizeRunCard must remove the cursor element."""
+        assert re.search(r'getElementById\s*\(\s*`cursor-\$\{runId\}`', js_text), \
+            "finalizeRunCard must get cursor element via getElementById('cursor-${runId}')"
+
+    def test_finalizeRunCard_adds_run_failed_class(self, js_text):
+        """finalizeRunCard must add run-failed class for non-success."""
+        assert re.search(r"classList\.add\s*\(\s*['\"]run-failed['\"]", js_text), \
+            "finalizeRunCard must call classList.add('run-failed') for non-success"
+
+    def test_finalizeRunCard_updates_elapsed_time(self, js_text):
+        """finalizeRunCard must update run-time-${runId} with timeAgo and durationMs."""
+        assert re.search(r'getElementById\s*\(\s*`run-time-\$\{runId\}`', js_text), \
+            "finalizeRunCard must update run-time-${runId} element"
+
+    def test_finalizeRunCard_uses_timeAgo_in_time(self, js_text):
+        """finalizeRunCard must use timeAgo(startedAt) for elapsed time display."""
+        assert re.search(r'timeAgo\s*\(\s*startedAt\s*\)', js_text), \
+            "finalizeRunCard must use timeAgo(startedAt) in time display"
+
+    def test_finalizeRunCard_uses_durationMs_in_time(self, js_text):
+        """finalizeRunCard must use durationMs(new Date(startedAt), ...) for duration."""
+        assert re.search(r'durationMs\s*\(\s*new\s+Date\s*\(\s*startedAt\s*\)', js_text), \
+            "finalizeRunCard must use durationMs(new Date(startedAt), ...) in time display"
+
+    def test_finalizeRunCard_guards_time_update(self, js_text):
+        """finalizeRunCard must only update time if startedAt and endedAt are present."""
+        assert re.search(r'if\s*\(\s*startedAt\s*&&\s*endedAt\s*\)', js_text), \
+            "finalizeRunCard must guard time update with 'if (startedAt && endedAt)'"
