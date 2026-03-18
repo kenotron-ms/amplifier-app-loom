@@ -3,6 +3,7 @@ package service
 import (
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"github.com/kardianos/service"
@@ -46,6 +47,12 @@ func (p *Program) Stop(s service.Service) error {
 // BuildServiceConfig returns the kardianos service config for the given install level.
 func BuildServiceConfig(level InstallLevel) *service.Config {
 	exePath, _ := os.Executable()
+	// Resolve symlinks so the LaunchAgent plist always points to the real binary
+	// inside the .app bundle — this ensures TCC grants to com.ms.agent-daemon apply
+	// to the daemon process (same TCC identity as the tray).
+	if resolved, err := filepath.EvalSymlinks(exePath); err == nil {
+		exePath = resolved
+	}
 	cfg := &service.Config{
 		Name:        ServiceName,
 		DisplayName: ServiceDisplayName,
