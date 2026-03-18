@@ -56,8 +56,11 @@ Use --system to install system-wide (starts at boot, requires admin/sudo).`,
 			if uc := config.CaptureUserContext(); uc != nil {
 				if cfg, cerr := s.GetConfig(context.Background()); cerr == nil {
 					cfg.UserContext = uc
-					_ = s.SaveConfig(context.Background(), cfg)
-					fmt.Printf("  \u2713 Captured user context (home: %s, shell: %s)\n", uc.HomeDir, uc.Shell)
+					if err := s.SaveConfig(context.Background(), cfg); err != nil {
+						fmt.Printf("  ⚠  Could not save user context: %v\n", err)
+					} else {
+						fmt.Printf("  ✓ Captured user context (home: %s, shell: %s)\n", uc.HomeDir, uc.Shell)
+					}
 				}
 			}
 			absorbed, _ := absorbEnvKeys(s)
