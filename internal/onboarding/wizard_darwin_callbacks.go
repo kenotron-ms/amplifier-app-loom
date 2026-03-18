@@ -28,7 +28,7 @@ import (
 )
 
 // wizardGoMessage is called from ObjC when JS posts to window.webkit.messageHandlers.agent.
-// Messages: setAnthropicKey, setOpenAIKey, openSettings, done.
+// Messages: setAnthropicKey, setOpenAIKey, openSettings, installService, done.
 //
 //export wizardGoMessage
 func wizardGoMessage(cAction *C.char, cPayload *C.char) {
@@ -50,6 +50,9 @@ func wizardGoMessage(cAction *C.char, cPayload *C.char) {
 	case "openSettings":
 		openSystemSettings()
 		go pollFDA(s)
+	case "installService":
+		// payload is "user" or "system"
+		go doInstallService(payload, s)
 	case "done":
 		go handleDone(s)
 	}
@@ -70,13 +73,10 @@ func wizardGoActivation() {
 	}
 }
 
-// handleDone runs the Done-button flow:
-//  1. Save API keys to BoltDB
-//  2. Capture UserContext (HomeDir, Shell, UID) into BoltDB
-//  3. Install the service (user-level LaunchAgent) if not already installed
-//  4. Start the service
-//  5. Mark OnboardingComplete = true
-//  6. Close the wizard and notify the tray
+// handleDone is the final action when the user clicks Done on the last step.
+// It saves any API keys that were entered, captures UserContext, marks
+// OnboardingComplete, and closes the wizard. Service installation is handled
+// separately by doInstallService (triggered from the Install step).
 func handleDone(s *state) {
 	st, err := store.Open(platform.DBPath())
 	if err != nil {
@@ -91,60 +91,96 @@ func handleDone(s *state) {
 		return
 	}
 
-	// Snapshot API keys under the mutex
+	// Snapshot API keys under the mutex and persist them.
 	s.mu.Lock()
-	anthropicKey := s.anthropicKey
-	openAIKey := s.openAIKey
+	cfg.AnthropicKey = s.anthropicKey
+	cfg.OpenAIKey = s.openAIKey
 	s.mu.Unlock()
 
-	// Save API keys
-	cfg.AnthropicKey = anthropicKey
-	cfg.OpenAIKey = openAIKey
-
-	// Capture user context (HomeDir, Shell, UID)
+	// Capture user context (HomeDir, Shell, UID) — always refresh on completion.
 	if uc := config.CaptureUserContext(); uc != nil {
 		cfg.UserContext = uc
 		slog.Info("onboarding: captured user context", "home", uc.HomeDir, "shell", uc.Shell)
 	}
+
+	cfg.OnboardingComplete = true
 
 	if err := st.SaveConfig(context.Background(), cfg); err != nil {
 		pushInstallError("Failed to save config: " + err.Error())
 		return
 	}
 
-	// Install service only if not already installed (kardianos/service is not idempotent)
-	if !isServiceInstalled() {
+	closeWizard(s)
+}
+
+// doInstallService handles the Install Service wizard step.
+// level is "user" (LaunchAgent, no admin) or "system" (LaunchDaemon, needs admin).
+// Posts serviceInstalled or serviceError events back to the JS layer.
+func doInstallService(level string, s *state) {
+	if level == "system" {
+		exePath, err := os.Executable()
+		if err != nil {
+			pushServiceError("Cannot determine binary path: " + err.Error())
+			return
+		}
+		script := fmt.Sprintf(
+			`do shell script "%s install --system" with administrator privileges`,
+			exePath,
+		)
+		if err := exec.Command("osascript", "-e", script).Run(); err != nil {
+			pushServiceError("System install failed (admin password required): " + err.Error())
+			return
+		}
+	} else {
 		svc, err := internalsvc.NewServiceForControl(internalsvc.LevelUser)
 		if err != nil {
-			pushInstallError("Failed to create service config: " + err.Error())
+			pushServiceError("Cannot create service config: " + err.Error())
 			return
 		}
 		if err := service.Control(svc, "install"); err != nil {
-			pushInstallError("Service install failed: " + err.Error())
+			pushServiceError("Install failed: " + err.Error())
 			return
 		}
-		slog.Info("onboarding: service installed")
 	}
 
-	// Start service (best-effort; may already be running)
+	// Capture user context now — we're still in the user's interactive session.
+	st, err := store.Open(platform.DBPath())
+	if err == nil {
+		if cfg, err := st.GetConfig(context.Background()); err == nil {
+			if uc := config.CaptureUserContext(); uc != nil {
+				cfg.UserContext = uc
+				_ = st.SaveConfig(context.Background(), cfg)
+			}
+		}
+		st.Close()
+	}
+
+	// Start service (best-effort).
 	if svc, err := internalsvc.NewServiceForControl(internalsvc.LevelUser); err == nil {
 		_ = service.Control(svc, "start")
 	}
 
-	// Mark onboarding complete
-	cfg.OnboardingComplete = true
-	if err := st.SaveConfig(context.Background(), cfg); err != nil {
-		slog.Warn("onboarding: failed to save OnboardingComplete", "err", err)
-	}
+	slog.Info("onboarding: service installed", "level", level)
+	pushJS(`window.dispatchEvent(new CustomEvent('serviceInstalled'))`)
+}
 
-	// Close the wizard
+// closeWizard marks the session closed, clears gState, and closes the NSPanel.
+func closeWizard(s *state) {
 	s.closed.Store(true)
 	gState.Store(nil)
 	C.wizard_close()
-
 	if s.onDone != nil {
 		s.onDone()
 	}
+}
+
+// pushServiceError sends a serviceError event to the wizard JS layer.
+func pushServiceError(msg string) {
+	msgJSON, _ := json.Marshal(msg)
+	pushJS(fmt.Sprintf(
+		`window.dispatchEvent(new CustomEvent('serviceError', {detail: {msg: %s}}))`,
+		string(msgJSON),
+	))
 }
 
 // openSystemSettings deep-links to Privacy & Security → Full Disk Access.

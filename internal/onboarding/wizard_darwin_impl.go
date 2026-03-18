@@ -14,6 +14,16 @@ package onboarding
 extern void wizardGoMessage(const char *action, const char *payload);
 extern void wizardGoActivation(void);
 
+// Custom panel that accepts keyboard input.
+// Standard NSPanel does not become the key window, blocking WKWebView keyboard events.
+@interface _AgentPanel : NSPanel
+@end
+
+@implementation _AgentPanel
+- (BOOL)canBecomeKeyWindow { return YES; }
+- (BOOL)canBecomeMainWindow { return YES; }
+@end
+
 // ── Script message + window delegate ────────────────────────────────────────
 @interface _AgentWizardDelegate : NSObject <WKScriptMessageHandler, NSWindowDelegate>
 @end
@@ -57,7 +67,7 @@ void wizard_show(const char *htmlCStr) {
         _gWebView = [[WKWebView alloc] initWithFrame:frame configuration:cfg];
         _gWebView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
 
-        _gPanel = [[NSPanel alloc]
+        _gPanel = [[_AgentPanel alloc]
             initWithContentRect:frame
             styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable)
             backing:NSBackingStoreBuffered
@@ -71,6 +81,7 @@ void wizard_show(const char *htmlCStr) {
         [_gWebView loadHTMLString:html baseURL:nil];
         [_gPanel center];
         [_gPanel makeKeyAndOrderFront:nil];
+        [_gPanel makeFirstResponder:_gWebView];
         [NSApp activateIgnoringOtherApps:YES];
     });
 }
@@ -119,11 +130,13 @@ import "C"
 import (
 	_ "embed"
 	"encoding/base64"
+	"errors"
 	"html"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 	"unsafe"
 )
@@ -150,22 +163,30 @@ func showImpl(s *state) {
 }
 
 // buildHTML substitutes Go-side placeholders into wizard.html.
-//   - {{FDA_GUIDE_DATA_URI}}  → base64-encoded PNG as a data: URI
-//   - {{ANTHROPIC_KEY}}       → HTML-escaped key (attribute context)
-//   - {{OPENAI_KEY}}          → HTML-escaped key (attribute context)
-//   - {{FDA_GRANTED}}         → "true" or "false" (JS boolean literal)
+//   - {{FDA_GUIDE_DATA_URI}} → base64 PNG data URI
+//   - {{ANTHROPIC_KEY}}      → HTML-escaped key (attribute context)
+//   - {{OPENAI_KEY}}         → HTML-escaped key (attribute context)
+//   - {{FDA_GRANTED}}        → "true"/"false" JS boolean
+//   - {{NEEDS_API_KEY}}      → "true"/"false" — whether API key step is needed
+//   - {{NEEDS_FDA}}          → "true"/"false" — whether FDA step is needed
+//   - {{NEEDS_SERVICE}}      → "true"/"false" — whether service install step is needed
 func buildHTML(s *state) string {
 	pngDataURI := "data:image/png;base64," + base64.StdEncoding.EncodeToString(fdaGuidePNG)
-	fdaVal := "false"
-	if s.fdaGranted.Load() {
-		fdaVal = "true"
+	b := func(v bool) string {
+		if v {
+			return "true"
+		}
+		return "false"
 	}
-	// HTML-escape keys: they are substituted into value="" attribute context.
+	// HTML-escape keys: substituted into value="" attribute context.
 	result := strings.NewReplacer(
 		"{{FDA_GUIDE_DATA_URI}}", pngDataURI,
 		"{{ANTHROPIC_KEY}}", html.EscapeString(s.anthropicKey),
 		"{{OPENAI_KEY}}", html.EscapeString(s.openAIKey),
-		"{{FDA_GRANTED}}", fdaVal,
+		"{{FDA_GRANTED}}", b(s.fdaGranted.Load()),
+		"{{NEEDS_API_KEY}}", b(s.steps.NeedsAPIKey),
+		"{{NEEDS_FDA}}", b(s.steps.NeedsFDA),
+		"{{NEEDS_SERVICE}}", b(s.steps.NeedsService),
 	).Replace(string(wizardHTMLBytes))
 	return result
 }
@@ -179,18 +200,45 @@ func pushJS(js string) {
 }
 
 // CheckFDA probes whether Full Disk Access has been granted to this process.
-// Uses the MacPaw PermissionsKit probe strategy: attempt to open a TCC-protected
-// file and check for EPERM/EACCES vs success.
+//
+// Strategy: try to open each TCC-protected file.
+//   - open() succeeds     → FDA granted, return true immediately
+//   - EPERM / EACCES      → TCC blocked the access; FDA definitely not granted
+//   - ENOENT / other      → file absent on this machine; try next probe
+//
+// If we exhaust every probe without a success, return false.
+// Note: TCC changes made in System Settings may not propagate to an already-running
+// process. If the user granted FDA but this still returns false, the wizard shows
+// a manual "continue anyway" bypass so they can proceed without a restart.
 func CheckFDA() bool {
 	home, _ := os.UserHomeDir()
-	if f, err := os.Open(filepath.Join(home, "Library", "Safari", "Bookmarks.plist")); err == nil {
-		f.Close()
-		return true
+
+	probes := []string{
+		// Safari bookmarks: always present if Safari has ever launched
+		filepath.Join(home, "Library", "Safari", "Bookmarks.plist"),
+		// Messages DB: present if Messages has been used
+		filepath.Join(home, "Library", "Messages", "chat.db"),
+		// Cookies: present on virtually all Macs
+		filepath.Join(home, "Library", "Cookies", "Cookies.binarycookies"),
+		// TimeMachine plist: in /Library, TCC-gated
+		"/Library/Preferences/com.apple.TimeMachine.plist",
 	}
-	// Fallback for users without Safari installed.
-	if f, err := os.Open("/Library/Preferences/com.apple.TimeMachine.plist"); err == nil {
-		f.Close()
-		return true
+
+	for _, p := range probes {
+		f, err := os.Open(p)
+		if err == nil {
+			f.Close()
+			return true // accessible → FDA granted
+		}
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) {
+			if pathErr.Err == syscall.EPERM || pathErr.Err == syscall.EACCES {
+				// TCC explicitly denied access — FDA not granted.
+				// No point trying other probes; the result will be the same.
+				return false
+			}
+		}
+		// ENOENT or other: file absent, try the next probe
 	}
 	return false
 }

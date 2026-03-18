@@ -10,6 +10,14 @@ import (
 	"github.com/ms/agent-daemon/internal/store"
 )
 
+// OnboardingSteps captures which setup conditions are unmet at wizard launch time.
+// Only steps with true flags are shown in the wizard.
+type OnboardingSteps struct {
+	NeedsAPIKey  bool // AnthropicKey is not set
+	NeedsFDA     bool // Full Disk Access not granted
+	NeedsService bool // LaunchAgent/Daemon plist not present
+}
+
 // state holds wizard session data shared between the pure-Go state machine and
 // the platform-specific CGo UI callbacks (wizard_darwin_callbacks.go).
 type state struct {
@@ -19,36 +27,36 @@ type state struct {
 	fdaGranted   atomic.Bool // accessed from multiple goroutines; use Load/Store
 	closed       atomic.Bool // accessed from multiple goroutines; use Load/Store
 	onDone       func()
+	steps        OnboardingSteps // which steps are needed (set once at Show() time)
 }
 
 // gState is the active wizard session. Set by Show(), read by CGo callbacks.
 // Defined here (no build tag) so all platform files can access it.
 var gState atomic.Pointer[state]
 
-// NeedsOnboarding returns true if the first-run wizard should be shown.
-//
-// Three conditions trigger onboarding:
-//   - No Anthropic API key — daemon cannot run AI jobs
-//   - UserContext.HomeDir missing — daemon won't find tools/configs under launchd
-//   - Full Disk Access not granted — daemon will silently fail to access job dirs
-func NeedsOnboarding(cfg *config.Config) bool {
-	if cfg.AnthropicKey == "" {
-		return true
+// DetectNeededSteps inspects live system state to determine which wizard steps
+// are required. Each step is only shown if its corresponding condition is unmet.
+func DetectNeededSteps(cfg *config.Config) OnboardingSteps {
+	return OnboardingSteps{
+		NeedsAPIKey:  cfg.AnthropicKey == "",
+		NeedsFDA:     !CheckFDA(),
+		NeedsService: !isServiceInstalled(),
 	}
-	if cfg.UserContext == nil || cfg.UserContext.HomeDir == "" {
-		return true
-	}
-	if !CheckFDA() {
-		return true
-	}
-	return false
 }
 
-// Show presents the onboarding wizard. onDone is called when the wizard
-// completes successfully (all steps done, service installed).
+// NeedsOnboarding returns true if any setup step is incomplete.
+// If this returns false the tray loads silently with no wizard shown.
+func NeedsOnboarding(cfg *config.Config) bool {
+	s := DetectNeededSteps(cfg)
+	return s.NeedsAPIKey || s.NeedsFDA || s.NeedsService
+}
+
+// Show presents the onboarding wizard. Only the steps returned by
+// DetectNeededSteps are shown; completed steps are skipped automatically.
+// onDone is called when the wizard closes successfully.
 // No-op on non-macOS or non-CGo builds (see wizard_other.go).
 //
-// Note: st is only used here to read the initial config for pre-filling.
+// Note: st is only used here to read initial config for pre-filling.
 // handleDone() opens its own connection to avoid holding st open for the
 // wizard's lifetime.
 func Show(st store.Store, onDone func()) {
@@ -68,6 +76,10 @@ func Show(st store.Store, onDone func()) {
 		s.anthropicKey = cfg.AnthropicKey
 		s.openAIKey = cfg.OpenAIKey
 		s.fdaGranted.Store(CheckFDA())
+		s.steps = DetectNeededSteps(cfg)
+	} else {
+		// No config yet — assume everything is needed.
+		s.steps = OnboardingSteps{NeedsAPIKey: true, NeedsFDA: true, NeedsService: true}
 	}
 	gState.Store(s)
 	showImpl(s)

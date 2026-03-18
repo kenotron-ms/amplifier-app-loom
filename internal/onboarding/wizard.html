@@ -15,7 +15,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    -webkit-user-select: none;
+    cursor: default;
   }
 
   /* ── Step indicator ──────────────────────────────────────── */
@@ -24,6 +24,8 @@
     justify-content: center;
     gap: 8px;
     padding: 20px 24px 0;
+    flex-wrap: wrap;
+    min-height: 44px;
   }
   .step-pill {
     display: flex;
@@ -35,20 +37,14 @@
     border-radius: 20px;
     background: #e5e5ea;
   }
-  .step-pill.active {
-    background: #0071e3;
-    color: white;
-  }
-  .step-pill.done {
-    background: #34c759;
-    color: white;
-  }
+  .step-pill.active { background: #0071e3; color: white; }
+  .step-pill.done   { background: #34c759; color: white; }
   .step-num { font-weight: 600; }
 
   /* ── Content area ────────────────────────────────────────── */
   .content {
     flex: 1;
-    padding: 24px 32px 16px;
+    padding: 20px 32px 12px;
     display: flex;
     flex-direction: column;
     overflow: auto;
@@ -57,22 +53,39 @@
   .step-view { display: none; flex-direction: column; flex: 1; }
   .step-view.active { display: flex; }
 
-  /* Step 1 – Welcome */
+  /* ── Welcome step ────────────────────────────────────────── */
   .welcome-icon {
-    width: 72px; height: 72px;
+    width: 68px; height: 68px;
     background: linear-gradient(145deg, #1c1c1e, #3a3a3c);
     border-radius: 16px;
-    margin: 8px auto 20px;
+    margin: 4px auto 16px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 36px;
+    font-size: 34px;
   }
-  h1 { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 10px; }
-  .subtitle {
+  h1 { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 8px; }
+  .welcome-sub {
     font-size: 14px; color: #6e6e73; text-align: center;
-    line-height: 1.5; max-width: 340px; margin: 0 auto;
+    line-height: 1.5; margin-bottom: 20px;
   }
+  .todo-list {
+    list-style: none;
+    background: white;
+    border-radius: 10px;
+    border: 1px solid #e5e5ea;
+    overflow: hidden;
+    max-width: 340px;
+    margin: 0 auto;
+  }
+  .todo-list li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 16px;
+    font-size: 13px;
+    border-bottom: 1px solid #f2f2f7;
+  }
+  .todo-list li:last-child { border-bottom: none; }
+  .todo-icon { font-size: 16px; width: 22px; text-align: center; }
 
-  /* Step 2 – API Keys */
+  /* ── API Keys step ───────────────────────────────────────── */
   .section-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
   .section-sub { font-size: 13px; color: #6e6e73; margin-bottom: 18px; line-height: 1.4; }
   .field-label {
@@ -88,10 +101,11 @@
     border-radius: 8px;
     font-size: 13px;
     font-family: "SF Mono", Menlo, monospace;
-    background: white;
-    color: #1d1d1f;
-    outline: none;
-    transition: border-color 0.15s;
+    background: white; color: #1d1d1f;
+    outline: none; transition: border-color 0.15s;
+    -webkit-user-select: text;
+    user-select: text;
+    cursor: text;
   }
   .field-input:focus { border-color: #0071e3; box-shadow: 0 0 0 3px rgba(0,113,227,0.15); }
   .field-input.error { border-color: #ff3b30; }
@@ -104,10 +118,10 @@
   .field-error.show { display: block; }
   .trust-note {
     font-size: 11px; color: #8e8e93; background: #e8f4fd;
-    border-radius: 8px; padding: 9px 12px; line-height: 1.4; margin-top: 4px;
+    border-radius: 8px; padding: 9px 12px; line-height: 1.4;
   }
 
-  /* Step 3 – Permissions */
+  /* ── Permissions (FDA) step ──────────────────────────────── */
   .perm-row {
     display: flex; align-items: center; gap: 12px;
     background: white; border-radius: 10px;
@@ -132,18 +146,56 @@
   .wait-msg.show { display: block; }
   .guide-img {
     width: 100%; border-radius: 8px;
-    border: 1px solid #e5e5ea; margin-top: 4px;
+    border: 1px solid #e5e5ea; margin-top: 12px;
   }
-  .err-msg {
-    font-size: 12px; color: #ff3b30; background: #fff0ee;
-    border-radius: 8px; padding: 9px 12px; margin-top: 8px; display: none;
+  .fda-bypass {
+    font-size: 12px;
+    color: #8e8e93;
+    text-align: center;
+    margin-top: 10px;
   }
-  .err-msg.show { display: block; }
+  .fda-bypass a {
+    color: #0071e3;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .fda-bypass a:hover { text-decoration: underline; }
+
+  /* ── Install Service step ────────────────────────────────── */
+  .service-cards { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+  .service-card {
+    display: flex; align-items: center; gap: 14px;
+    background: white; border-radius: 10px; padding: 14px 16px;
+    border: 2px solid #e5e5ea; cursor: pointer; transition: border-color 0.15s;
+  }
+  .service-card:hover { border-color: #b0b0b8; }
+  .service-card.selected { border-color: #0071e3; }
+  .service-card-icon { font-size: 28px; }
+  .service-card-text { flex: 1; }
+  .service-card-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .service-card-desc { font-size: 12px; color: #6e6e73; line-height: 1.4; }
+  .service-card-check { font-size: 20px; color: #0071e3; opacity: 0; transition: opacity 0.15s; }
+  .service-card.selected .service-card-check { opacity: 1; }
+
+  .btn-install {
+    width: 100%; padding: 10px; background: #0071e3; color: white;
+    border: none; border-radius: 8px; font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn-install:hover { background: #0062c5; }
+  .btn-install:disabled { background: #c7c7cc; cursor: not-allowed; }
+
+  .install-status {
+    font-size: 12px; text-align: center;
+    margin-top: 8px; min-height: 18px;
+  }
+  .install-status.success { color: #34c759; }
+  .install-status.error   { color: #ff3b30; }
 
   /* ── Footer ──────────────────────────────────────────────── */
   .footer {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 12px 32px 20px;
+    padding: 10px 32px 18px;
     border-top: 1px solid #e5e5ea;
     background: #f5f5f7;
   }
@@ -160,185 +212,375 @@
 </head>
 <body>
 
-<!-- Step indicators -->
-<div class="steps" id="steps">
-  <div class="step-pill active" id="pill-1"><span class="step-num">1</span> Welcome</div>
-  <div class="step-pill" id="pill-2"><span class="step-num">2</span> API Keys</div>
-  <div class="step-pill" id="pill-3"><span class="step-num">3</span> Permissions</div>
-</div>
+<div class="steps" id="steps"></div>
 
 <div class="content">
-  <!-- Step 1: Welcome -->
-  <div class="step-view active" id="step-1">
+
+  <!-- Welcome -->
+  <div class="step-view" id="step-welcome">
     <div class="welcome-icon">🤖</div>
-    <h1>Welcome to Agent Daemon</h1>
-    <p class="subtitle">Your AI-powered job scheduler. Let&#x2019;s get you set up in three quick steps.</p>
+    <h1>Agent Daemon</h1>
+    <p class="welcome-sub" id="welcome-sub">Let's finish getting things set up.</p>
+    <ul class="todo-list" id="welcome-list"></ul>
   </div>
 
-  <!-- Step 2: API Keys -->
-  <div class="step-view" id="step-2">
+  <!-- API Keys -->
+  <div class="step-view" id="step-apikey">
     <div class="section-title">Connect your AI</div>
-    <p class="section-sub">Agent Daemon needs an API key to run AI-powered jobs. Add at least one.</p>
+    <p class="section-sub">Agent Daemon needs an API key to run AI-powered jobs.</p>
 
     <div class="field-wrap">
       <label class="field-label" for="anthropic-key">Anthropic API Key</label>
       <input class="field-input" id="anthropic-key" type="password"
              placeholder="sk-ant-..." autocomplete="off"
              value="{{ANTHROPIC_KEY}}">
-      <span class="field-check" id="ant-check">&#x2705;</span>
-      <div class="field-error" id="ant-error">Anthropic API key is required</div>
+      <span class="field-check" id="ant-check">✅</span>
+      <div class="field-error" id="ant-error">Required</div>
     </div>
 
     <div class="field-wrap">
-      <label class="field-label" for="openai-key">OpenAI API Key <span class="field-optional">(Optional)</span></label>
+      <label class="field-label" for="openai-key">
+        OpenAI API Key <span class="field-optional">(Optional)</span>
+      </label>
       <input class="field-input" id="openai-key" type="password"
              placeholder="sk-..." autocomplete="off"
              value="{{OPENAI_KEY}}">
-      <span class="field-check" id="oai-check">&#x2705;</span>
+      <span class="field-check" id="oai-check">✅</span>
     </div>
 
-    <div class="trust-note">&#x1F512; Keys are stored locally in the app database and only sent to the respective AI providers.</div>
+    <div class="trust-note">
+      🔒 Keys are stored locally in the app database and only sent to the respective AI providers.
+    </div>
   </div>
 
-  <!-- Step 3: Permissions -->
-  <div class="step-view" id="step-3">
+  <!-- Full Disk Access -->
+  <div class="step-view" id="step-fda">
     <div class="section-title">Grant Full Disk Access</div>
-    <p class="section-sub">The background service needs Full Disk Access to run jobs, source shell configs, and find tools like <code>.nvm</code> and <code>.amplifier</code>.</p>
+    <p class="section-sub">
+      The background service needs Full Disk Access to run jobs, source shell configs
+      like <code>.zshrc</code>, and find tools like <code>.nvm</code> and <code>.amplifier</code>.
+    </p>
 
-    <div class="perm-row" id="perm-row">
-      <div class="perm-icon" id="perm-icon">&#x26A0;&#xFE0F;</div>
+    <div class="perm-row">
+      <div class="perm-icon" id="perm-icon">⚠️</div>
       <div class="perm-text">
         <div class="perm-name">Full Disk Access</div>
-        <div class="perm-desc" id="perm-desc">Required &#xB7; Background service</div>
+        <div class="perm-desc" id="perm-desc">Required · Background service</div>
       </div>
-      <button class="settings-btn" id="settings-btn" onclick="openSettings()">Open System Settings &#x2192;</button>
+      <button class="settings-btn" id="settings-btn" onclick="openSettings()">
+        Open System Settings →
+      </button>
     </div>
 
-    <div class="wait-msg" id="wait-msg">&#x23F3; Waiting for permission&#x2026; (it&#x2019;s OK to switch back here)</div>
-    <img class="guide-img" id="guide-img" src="{{FDA_GUIDE_DATA_URI}}" alt="System Settings guide" style="display:none">
-    <div class="err-msg" id="err-msg"></div>
+    <div class="wait-msg" id="wait-msg">⏳ Waiting… switch back here once you've toggled it on</div>
+    <img class="guide-img" id="guide-img" src="{{FDA_GUIDE_DATA_URI}}"
+         alt="System Settings — Full Disk Access guide" style="display:none">
+    <div class="fda-bypass" id="fda-bypass" style="display:none">
+      Full Disk Access is optional — <a onclick="skipFDA()">skip for now →</a>
+    </div>
+    <p id="fda-skip-note" style="display:none; font-size:11px; color:#8e8e93; text-align:center; margin-top:8px;">
+      Skipped — Full Disk Access can be enabled later from the menu bar icon.
+    </p>
   </div>
+
+  <!-- Install Service -->
+  <div class="step-view" id="step-service">
+    <div class="section-title">Install background service</div>
+    <p class="section-sub">
+      Choose how Agent Daemon runs in the background to execute your scheduled jobs.
+    </p>
+
+    <div class="service-cards">
+      <div class="service-card selected" id="card-user" onclick="selectLevel('user')">
+        <div class="service-card-icon">👤</div>
+        <div class="service-card-text">
+          <div class="service-card-title">Just for me</div>
+          <div class="service-card-desc">Starts when you log in. No admin password needed.</div>
+        </div>
+        <div class="service-card-check">✓</div>
+      </div>
+
+      <div class="service-card" id="card-system" onclick="selectLevel('system')">
+        <div class="service-card-icon">🖥️</div>
+        <div class="service-card-text">
+          <div class="service-card-title">System daemon</div>
+          <div class="service-card-desc">Starts at boot for all users. Requires admin password.</div>
+        </div>
+        <div class="service-card-check">✓</div>
+      </div>
+    </div>
+
+    <button class="btn-install" id="install-btn" onclick="doInstall()">
+      Install Service →
+    </button>
+    <div class="install-status" id="install-status"></div>
+  </div>
+
 </div>
 
-<!-- Footer -->
 <div class="footer">
-  <button class="btn btn-back" id="btn-back" style="visibility:hidden" onclick="goBack()">&#x2190; Back</button>
+  <button class="btn btn-back" id="btn-back" style="visibility:hidden" onclick="goBack()">
+    ← Back
+  </button>
   <div></div>
-  <button class="btn btn-primary" id="btn-next" onclick="goNext()">Get Started &#x2192;</button>
+  <button class="btn btn-primary" id="btn-next" onclick="goNext()">
+    Get Started →
+  </button>
 </div>
 
 <script>
-  var currentStep = 1;
-  var fdaGranted  = {{FDA_GRANTED}};
+  // ── State from Go ─────────────────────────────────────────
+  var needsAPIKey  = {{NEEDS_API_KEY}};
+  var needsFDA     = {{NEEDS_FDA}};
+  var needsService = {{NEEDS_SERVICE}};
+  var fdaGranted   = {{FDA_GRANTED}};
+  var fdaSkipped   = false;
 
+  // ── Build step sequence ───────────────────────────────────
+  // welcome is always first; then only the steps that are needed.
+  var STEPS = ['welcome'];
+  if (needsAPIKey)  STEPS.push('apikey');
+  if (needsFDA)     STEPS.push('fda');
+  if (needsService) STEPS.push('service');
+
+  var idx = 0;
+  var serviceInstalled = false;
+  var selectedLevel    = 'user';
+
+  function step() { return STEPS[idx]; }
+  function isLast() { return idx === STEPS.length - 1; }
+
+  var STEP_LABELS = {
+    welcome: 'Welcome',
+    apikey:  'API Keys',
+    fda:     'Permissions',
+    service: 'Install'
+  };
+
+  // ── JS → Go ───────────────────────────────────────────────
   function post(action, payload) {
-    window.webkit.messageHandlers.agent.postMessage({ action: action, payload: payload || "" });
+    window.webkit.messageHandlers.agent.postMessage({
+      action: action, payload: payload || ''
+    });
   }
 
-  function updateStepUI() {
-    for (var i = 1; i <= 3; i++) {
-      var pill = document.getElementById("pill-" + i);
-      var view = document.getElementById("step-" + i);
-      pill.className = "step-pill";
-      view.className = "step-view";
-      if (i < currentStep)  pill.classList.add("done");
-      if (i === currentStep) { pill.classList.add("active"); view.classList.add("active"); }
+  // ── Render ────────────────────────────────────────────────
+  function render() {
+    // Step pills
+    var pills = STEPS.map(function(s, i) {
+      var cls = i < idx ? 'step-pill done' :
+                i === idx ? 'step-pill active' : 'step-pill';
+      return '<div class="' + cls + '"><span class="step-num">' +
+             (i + 1) + '</span> ' + STEP_LABELS[s] + '</div>';
+    }).join('');
+    document.getElementById('steps').innerHTML = pills;
+
+    // Show only current step
+    ['welcome', 'apikey', 'fda', 'service'].forEach(function(s) {
+      var el = document.getElementById('step-' + s);
+      if (el) el.className = 'step-view' + (s === step() ? ' active' : '');
+    });
+
+    // Back button
+    document.getElementById('btn-back').style.visibility =
+      idx > 0 ? 'visible' : 'hidden';
+
+    // Next button
+    var next = document.getElementById('btn-next');
+    var label = isLast() ? 'Done' : 'Continue →';
+
+    switch (step()) {
+      case 'welcome':
+        next.textContent = 'Get Started →';
+        next.disabled = false;
+        break;
+      case 'apikey':
+        next.textContent = label;
+        refreshContinueBtn();
+        break;
+      case 'fda':
+        next.textContent = label;
+        next.disabled = !fdaGranted && !fdaSkipped;
+        if (fdaGranted) markFDAGranted();
+        break;
+      case 'service':
+        next.textContent = 'Done';
+        next.disabled = !serviceInstalled;
+        break;
     }
-    var back = document.getElementById("btn-back");
-    var next = document.getElementById("btn-next");
-    back.style.visibility = currentStep > 1 ? "visible" : "hidden";
-    if (currentStep === 1) {
-      next.textContent = "Get Started \u2192";
-      next.disabled = false;
-    } else if (currentStep === 2) {
-      next.textContent = "Continue \u2192";
-      updateContinueState();
+  }
+
+  function refreshContinueBtn() {
+    if (step() !== 'apikey') return;
+    var key = document.getElementById('anthropic-key').value.trim();
+    document.getElementById('btn-next').disabled = (key === '');
+    document.getElementById('ant-check').className =
+      'field-check' + (key ? ' show' : '');
+    var oai = document.getElementById('openai-key').value.trim();
+    document.getElementById('oai-check').className =
+      'field-check' + (oai ? ' show' : '');
+  }
+
+  // ── Navigation ────────────────────────────────────────────
+  function advance() {
+    if (!isLast()) {
+      idx++;
+      render();
     } else {
-      next.textContent = "Done";
-      next.disabled = !fdaGranted;
-      if (fdaGranted) markFDAGranted();
+      // Last step — trigger final save + close
+      document.getElementById('btn-next').disabled = true;
+      document.getElementById('btn-next').textContent = 'Finishing…';
+      post('done', '');
     }
-  }
-
-  function updateContinueState() {
-    if (currentStep !== 2) return;
-    var key = document.getElementById("anthropic-key").value.trim();
-    document.getElementById("btn-next").disabled = (key === "");
-    document.getElementById("ant-check").className = "field-check" + (key ? " show" : "");
-    var ok = document.getElementById("openai-key").value.trim();
-    document.getElementById("oai-check").className = "field-check" + (ok ? " show" : "");
   }
 
   function goNext() {
-    if (currentStep === 1) {
-      currentStep = 2;
-      updateStepUI();
-    } else if (currentStep === 2) {
-      var key = document.getElementById("anthropic-key").value.trim();
-      if (!key) {
-        document.getElementById("anthropic-key").classList.add("error");
-        document.getElementById("ant-error").classList.add("show");
-        return;
-      }
-      post("setAnthropicKey", key);
-      post("setOpenAIKey", document.getElementById("openai-key").value.trim());
-      currentStep = 3;
-      updateStepUI();
-    } else if (currentStep === 3 && fdaGranted) {
-      document.getElementById("btn-next").disabled = true;
-      document.getElementById("btn-next").textContent = "Setting up\u2026";
-      post("done", "");
+    switch (step()) {
+      case 'welcome':
+        advance();
+        break;
+
+      case 'apikey':
+        var key = document.getElementById('anthropic-key').value.trim();
+        if (!key) {
+          document.getElementById('anthropic-key').classList.add('error');
+          document.getElementById('ant-error').classList.add('show');
+          return;
+        }
+        post('setAnthropicKey', key);
+        post('setOpenAIKey',    document.getElementById('openai-key').value.trim());
+        advance();
+        break;
+
+      case 'fda':
+        if (fdaGranted || fdaSkipped) advance();
+        break;
+
+      case 'service':
+        if (serviceInstalled) post('done', '');
+        break;
     }
   }
 
   function goBack() {
-    if (currentStep === 2) {
-      document.getElementById("anthropic-key").classList.remove("error");
-      document.getElementById("ant-error").classList.remove("show");
+    if (idx > 0) {
+      if (step() === 'apikey') {
+        document.getElementById('anthropic-key').classList.remove('error');
+        document.getElementById('ant-error').classList.remove('show');
+      }
+      idx--;
+      render();
     }
-    if (currentStep > 1) { currentStep--; updateStepUI(); }
   }
 
+  // ── Permissions step ──────────────────────────────────────
   function openSettings() {
-    var btn = document.getElementById("settings-btn");
-    btn.disabled = true;
-    btn.textContent = "Waiting\u2026";
-    document.getElementById("wait-msg").classList.add("show");
-    document.getElementById("guide-img").style.display = "block";
-    post("openSettings", "");
+    document.getElementById('settings-btn').disabled = true;
+    document.getElementById('settings-btn').textContent = 'Waiting…';
+    document.getElementById('wait-msg').classList.add('show');
+    document.getElementById('guide-img').style.display = 'block';
+    document.getElementById('fda-bypass').style.display = 'block'; // show immediately
+    post('openSettings', '');
+  }
+
+  function skipFDA() {
+    fdaSkipped = true;
+    document.getElementById('fda-bypass').style.display = 'none';
+    // Show a soft note
+    var note = document.getElementById('fda-skip-note');
+    if (note) { note.style.display = 'block'; }
+    advance(); // just advance — don't mark fdaGranted
   }
 
   function markFDAGranted() {
-    document.getElementById("perm-icon").textContent = "\u2705";
-    document.getElementById("perm-desc").textContent = "Full Disk Access granted \u2713";
-    document.getElementById("settings-btn").style.display = "none";
-    document.getElementById("wait-msg").classList.remove("show");
-    document.getElementById("btn-next").disabled = false;
+    document.getElementById('perm-icon').textContent = '✅';
+    document.getElementById('perm-desc').textContent = 'Full Disk Access granted ✓';
+    document.getElementById('settings-btn').style.display = 'none';
+    document.getElementById('wait-msg').classList.remove('show');
+    document.getElementById('btn-next').disabled = false;
   }
 
-  window.addEventListener("fdaGranted", function() {
+  // ── Service install step ──────────────────────────────────
+  function selectLevel(level) {
+    selectedLevel = level;
+    document.getElementById('card-user').className =
+      'service-card' + (level === 'user' ? ' selected' : '');
+    document.getElementById('card-system').className =
+      'service-card' + (level === 'system' ? ' selected' : '');
+  }
+
+  function doInstall() {
+    document.getElementById('install-btn').disabled = true;
+    document.getElementById('install-btn').textContent = 'Installing…';
+    document.getElementById('install-status').textContent = '';
+    document.getElementById('install-status').className = 'install-status';
+    post('installService', selectedLevel);
+  }
+
+  // ── Welcome checklist ─────────────────────────────────────
+  function buildWelcome() {
+    var items = [];
+    if (needsAPIKey)  items.push(['🔑', 'Connect an AI API key']);
+    if (needsFDA)     items.push(['🔒', 'Grant Full Disk Access']);
+    if (needsService) items.push(['⚙️', 'Install the background service']);
+
+    var sub = items.length === 1
+      ? 'One quick step to complete setup.'
+      : items.length + ' steps to complete setup.';
+    document.getElementById('welcome-sub').textContent = sub;
+
+    document.getElementById('welcome-list').innerHTML = items.map(function(it) {
+      return '<li><span class="todo-icon">' + it[0] + '</span>' + it[1] + '</li>';
+    }).join('');
+  }
+
+  // ── Go → JS events ────────────────────────────────────────
+  window.addEventListener('fdaGranted', function() {
     fdaGranted = true;
     markFDAGranted();
+    if (step() === 'fda') {
+      document.getElementById('btn-next').disabled = false;
+    }
   });
 
-  window.addEventListener("installError", function(e) {
-    var msg = e.detail && e.detail.msg ? e.detail.msg : "An error occurred during install.";
-    var el = document.getElementById("err-msg");
-    el.textContent = "\u26A0 " + msg + " \u2014 try again or run `agent-daemon install` in the terminal.";
-    el.classList.add("show");
-    var btn = document.getElementById("btn-next");
-    btn.disabled = false;
-    btn.textContent = "Done";
+  window.addEventListener('serviceInstalled', function() {
+    serviceInstalled = true;
+    document.getElementById('install-btn').style.display = 'none';
+    document.getElementById('install-status').textContent = '✓ Service installed successfully';
+    document.getElementById('install-status').className = 'install-status success';
+    document.getElementById('btn-next').disabled = false;
   });
 
-  document.getElementById("anthropic-key").addEventListener("input", function() {
-    document.getElementById("anthropic-key").classList.remove("error");
-    document.getElementById("ant-error").classList.remove("show");
-    updateContinueState();
+  window.addEventListener('serviceError', function(e) {
+    var msg = (e.detail && e.detail.msg) ? e.detail.msg : 'Install failed';
+    document.getElementById('install-btn').disabled = false;
+    document.getElementById('install-btn').textContent = 'Try Again →';
+    document.getElementById('install-status').textContent = '⚠ ' + msg;
+    document.getElementById('install-status').className = 'install-status error';
   });
-  document.getElementById("openai-key").addEventListener("input", updateContinueState);
 
-  updateStepUI();
+  window.addEventListener('installError', function(e) {
+    var msg = (e.detail && e.detail.msg) ? e.detail.msg : 'An error occurred.';
+    var next = document.getElementById('btn-next');
+    next.disabled = false;
+    next.textContent = 'Done';
+    var err = document.createElement('div');
+    err.style.cssText = 'font-size:12px;color:#ff3b30;margin-top:8px;';
+    err.textContent = '⚠ ' + msg;
+    document.querySelector('.step-view.active').appendChild(err);
+  });
+
+  // ── Input listeners ───────────────────────────────────────
+  document.getElementById('anthropic-key').addEventListener('input', function() {
+    this.classList.remove('error');
+    document.getElementById('ant-error').classList.remove('show');
+    refreshContinueBtn();
+  });
+  document.getElementById('openai-key').addEventListener('input', refreshContinueBtn);
+
+  // ── Init ──────────────────────────────────────────────────
+  buildWelcome();
+  render();
 </script>
 </body>
 </html>
