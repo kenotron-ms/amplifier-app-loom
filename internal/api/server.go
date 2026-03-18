@@ -36,12 +36,12 @@ func NewServer(cfg *config.Config, s store.Store, sched *scheduler.Scheduler, q 
 		queue:       q,
 		startedAt:   startedAt,
 	}
-	srv.nlClient = nl.NewClientFromConfig(cfg, s)
+	srv.nlClient = nl.NewClientFromConfig(cfg, s, sched)
 	return srv
 }
 
 func (s *Server) reinitNLClient() {
-	client := nl.NewClientFromConfig(s.cfg, s.store)
+	client := nl.NewClientFromConfig(s.cfg, s.store, s.scheduler)
 	s.nlMu.Lock()
 	s.nlClient = client
 	s.nlMu.Unlock()
