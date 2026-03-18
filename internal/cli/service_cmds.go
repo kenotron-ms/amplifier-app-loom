@@ -4,10 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
-	"os/user"
-	"runtime"
-	"strings"
 
 	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
@@ -57,11 +53,14 @@ Use --system to install system-wide (starts at boot, requires admin/sudo).`,
 		if err == nil {
 			// Capture user identity now — we're running in the user's shell
 			// session so $HOME, $SHELL, and $USER are correct and complete.
-			if uc := captureUserContext(); uc != nil {
+			if uc := config.CaptureUserContext(); uc != nil {
 				if cfg, cerr := s.GetConfig(context.Background()); cerr == nil {
 					cfg.UserContext = uc
-					_ = s.SaveConfig(context.Background(), cfg)
-					fmt.Printf("  \u2713 Captured user context (home: %s, shell: %s)\n", uc.HomeDir, uc.Shell)
+					if err := s.SaveConfig(context.Background(), cfg); err != nil {
+						fmt.Printf("  ⚠  Could not save user context: %v\n", err)
+					} else {
+						fmt.Printf("  ✓ Captured user context (home: %s, shell: %s)\n", uc.HomeDir, uc.Shell)
+					}
 				}
 			}
 			absorbed, _ := absorbEnvKeys(s)
@@ -148,72 +147,6 @@ var serveCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return internalsvc.RunDaemon()
 	},
-}
-
-// captureUserContext records the identity of the installing user so the daemon
-// can recreate a proper shell environment when spawning jobs.
-//
-// For user-level installs this is simply the current process user.
-// For system-level installs (sudo), $SUDO_USER identifies the real person who
-// ran sudo — we always want that user, not root, because amplifier/claude auth
-// tokens and configs live under their home directory.
-func captureUserContext() *config.UserContext {
-	var u *user.User
-	var err error
-
-	// Prefer the real invoking user when running under sudo.
-	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" {
-		u, err = user.Lookup(sudoUser)
-	}
-	if u == nil {
-		u, err = user.Current()
-	}
-	if err != nil || u == nil {
-		return nil
-	}
-
-	return &config.UserContext{
-		HomeDir:  u.HomeDir,
-		Username: u.Username,
-		Shell:    lookupUserShell(u.Username),
-		UID:      u.Uid,
-	}
-}
-
-// lookupUserShell returns the login shell for username.
-// On macOS it queries Directory Services; on other platforms it parses
-// /etc/passwd. Falls back to /bin/zsh (macOS) or /bin/bash (Linux).
-func lookupUserShell(username string) string {
-	if runtime.GOOS == "darwin" {
-		out, err := exec.Command("dscl", ".", "-read",
-			"/Users/"+username, "UserShell").Output()
-		if err == nil {
-			// Output: "UserShell: /bin/zsh\n"
-			for _, line := range strings.Split(string(out), "\n") {
-				if strings.HasPrefix(line, "UserShell:") {
-					if parts := strings.Fields(line); len(parts) >= 2 {
-						return parts[1]
-					}
-				}
-			}
-		}
-	}
-
-	// Linux / fallback: parse /etc/passwd
-	// Format: username:password:uid:gid:gecos:home:shell
-	if data, err := os.ReadFile("/etc/passwd"); err == nil {
-		for _, line := range strings.Split(string(data), "\n") {
-			fields := strings.Split(line, ":")
-			if len(fields) >= 7 && fields[0] == username {
-				return fields[6]
-			}
-		}
-	}
-
-	if runtime.GOOS == "darwin" {
-		return "/bin/zsh"
-	}
-	return "/bin/bash"
 }
 
 func init() {

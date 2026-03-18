@@ -36,6 +36,11 @@ type Config struct {
 	AIProvider     string `json:"aiProvider,omitempty"`  // "anthropic" | "openai"
 	LogLevel    string `json:"logLevel"`
 	UserContext *UserContext `json:"userContext,omitempty"`
+
+	// OnboardingComplete is set to true once the user finishes the first-run wizard.
+	// When false, the full 3-step wizard is shown. When true, only the tray health
+	// indicator's targeted "Fix →" dialog is shown for missing conditions.
+	OnboardingComplete bool `json:"onboardingComplete,omitempty"`
 }
 
 func Defaults() *Config {

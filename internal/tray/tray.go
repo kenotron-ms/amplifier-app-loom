@@ -3,6 +3,7 @@
 package tray
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -17,9 +18,18 @@ import (
 	"github.com/kardianos/service"
 
 	"github.com/ms/agent-daemon/internal/api"
+	"github.com/ms/agent-daemon/internal/config"
+	"github.com/ms/agent-daemon/internal/onboarding"
+	"github.com/ms/agent-daemon/internal/platform"
 	internalsvc "github.com/ms/agent-daemon/internal/service"
+	"github.com/ms/agent-daemon/internal/store"
 	"github.com/ms/agent-daemon/internal/updater"
 )
+
+type healthIssue struct {
+	msg     string // shown in menu
+	fixKind string // "apikey" | "fda" | "service"
+}
 
 // Run launches the system tray app. Blocks until the user quits.
 // Must be called from the main goroutine.
@@ -31,7 +41,59 @@ func Run(port int) error {
 	return nil
 }
 
+func checkHealth(port int) []healthIssue {
+	var issues []healthIssue
+
+	s, err := store.Open(platform.DBPath())
+	if err == nil {
+		if cfg, err := s.GetConfig(context.Background()); err == nil {
+			if cfg.AnthropicKey == "" {
+				issues = append(issues, healthIssue{"Anthropic API key missing", "apikey"})
+			}
+		}
+		s.Close()
+	}
+
+	if !onboarding.CheckFDA() {
+		issues = append(issues, healthIssue{"Full Disk Access missing", "fda"})
+	}
+
+	if !isServiceInstalled() {
+		issues = append(issues, healthIssue{"Background service not installed", "service"})
+	}
+
+	// Service running check (HTTP 200); treat connection refused as dead service.
+	url := fmt.Sprintf("http://localhost:%d/api/status", port)
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		issues = append(issues, healthIssue{"Service not responding", "service"})
+	} else {
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			issues = append(issues, healthIssue{"Service not responding", "service"})
+		}
+	}
+
+	return issues
+}
+
 func onReady(port int) {
+	// ── Onboarding check (macOS .app launch only) ─────────────────────────
+	// Shows the first-run wizard if API key, UserContext, or FDA are missing.
+	if ost, err := store.Open(platform.DBPath()); err != nil {
+		slog.Warn("tray: onboarding check: cannot open store", "err", err)
+	} else {
+		if cfg, err := ost.GetConfig(context.Background()); err != nil {
+			slog.Warn("tray: onboarding check: cannot read config", "err", err)
+		} else if onboarding.NeedsOnboarding(cfg) {
+			onboarding.Show(ost, func() {
+				slog.Info("tray: onboarding complete")
+			})
+		}
+		ost.Close()
+	}
+
 	// Step 1: tray icon appears immediately.
 	icon := makeIcon()
 	systray.SetTemplateIcon(icon, icon)
@@ -45,16 +107,26 @@ func onReady(port int) {
 		systray.AddSeparator()
 	}
 
-	// ── Status section ────────────────────────────────────────────────────────
+	// ── Status section ──────────────────────────────────────────────────────────────────────────────────────────────────
 	mStatus := systray.AddMenuItem("⬤  Checking…", "Daemon status")
 	mStatus.Disable()
 	mDetails := systray.AddMenuItem("", "Jobs / queue details")
 	mDetails.Disable()
 	mDetails.Hide()
 
+	// ── Health indicator (hidden until first check fires) ─────────────────
+	mActionRequired := systray.AddMenuItem("⚠  Action Required", "One or more setup issues require attention")
+	mActionRequired.Hide()
+	mFixAPIKey := mActionRequired.AddSubMenuItem("Anthropic API key missing   Fix →", "Open settings to add API key")
+	mFixFDA := mActionRequired.AddSubMenuItem("Full Disk Access missing     Fix →", "Open System Settings")
+	mFixService := mActionRequired.AddSubMenuItem("Service not installed         Fix →", "Install background service")
+	mFixAPIKey.Hide()
+	mFixFDA.Hide()
+	mFixService.Hide()
+
 	systray.AddSeparator()
 
-	// ── Quick actions ─────────────────────────────────────────────────────────
+	// ── Quick actions ───────────────────────────────────────────────────────────────────────────────────────────────────
 	mOpenUI := systray.AddMenuItem("Open Web UI", fmt.Sprintf("http://localhost:%d", port))
 	systray.AddSeparator()
 	mStart := systray.AddMenuItem("Start Daemon", "")
@@ -65,7 +137,7 @@ func onReady(port int) {
 
 	systray.AddSeparator()
 
-	// ── Installation section ──────────────────────────────────────────────────
+	// ── Installation section ────────────────────────────────────────────────────────────────────────────────────────────
 	mInstall := systray.AddMenuItem("Install", "")
 	mInstallUser := mInstall.AddSubMenuItem("User (login items)", "Starts on login, no sudo needed")
 	mInstallSystem := mInstall.AddSubMenuItem("System (boot daemon)", "Starts at boot, requires sudo")
@@ -76,7 +148,7 @@ func onReady(port int) {
 	mUpdateAvail.Hide()
 	mQuit := systray.AddMenuItem("Quit Tray", "Close the tray app (daemon keeps running)")
 
-	// ── Background tasks ──────────────────────────────────────────────────────
+	// ── Background tasks ────────────────────────────────────────────────────────────────────────────────────────────────
 	// CLI install runs in background — may show an admin dialog, must not block.
 	go installCLIIfNeeded()
 
@@ -98,7 +170,51 @@ func onReady(port int) {
 		}
 	}()
 
-	// ── Event loop ────────────────────────────────────────────────────────────
+	// Health check: starts after onboarding is done (poll OnboardingComplete).
+	// Runs every 30 seconds once active. Does NOT run concurrently with the wizard.
+	go func() {
+		// Wait until onboarding is marked complete.
+		for {
+			time.Sleep(5 * time.Second)
+			hs, err := store.Open(platform.DBPath())
+			if err != nil {
+				continue
+			}
+			cfg, err := hs.GetConfig(context.Background())
+			hs.Close()
+			if err == nil && cfg.OnboardingComplete {
+				break
+			}
+		}
+		// 30-second health check loop.
+		for {
+			issues := checkHealth(port)
+			if len(issues) == 0 {
+				systray.SetTooltip("agent-daemon")
+				mActionRequired.Hide()
+			} else {
+				systray.SetTooltip("agent-daemon ⚠ action required")
+				mFixAPIKey.Hide()
+				mFixFDA.Hide()
+				mFixService.Hide()
+				for _, iss := range issues {
+					slog.Debug("tray: health issue detected", "msg", iss.msg, "kind", iss.fixKind)
+					switch iss.fixKind {
+					case "apikey":
+						mFixAPIKey.Show()
+					case "fda":
+						mFixFDA.Show()
+					case "service":
+						mFixService.Show()
+					}
+				}
+				mActionRequired.Show()
+			}
+			time.Sleep(30 * time.Second)
+		}
+	}()
+
+	// ── Event loop ──────────────────────────────────────────────────────────────────────────────────────────────────────
 	setupCh := make(chan struct{})
 	if mSetup != nil {
 		setupCh = mSetup.ClickedCh
@@ -138,6 +254,23 @@ func onReady(port int) {
 
 		case <-mUpdateAvail.ClickedCh:
 			openBrowser("https://github.com/kenotron-ms/agent-daemon/releases/latest")
+
+		case <-mFixAPIKey.ClickedCh:
+			openBrowser(fmt.Sprintf("http://localhost:%d/#/settings", port))
+
+		case <-mFixFDA.ClickedCh:
+			if ost, err := store.Open(platform.DBPath()); err != nil {
+				slog.Warn("tray: mFixFDA: cannot open store", "err", err)
+			} else {
+				onboarding.Show(ost, func() {
+					slog.Info("tray: FDA fix via health indicator complete")
+				})
+				ost.Close()
+			}
+
+		case <-mFixService.ClickedCh:
+			captureAndSaveUserContext()
+			installService(internalsvc.LevelUser)
 
 		case <-mQuit.ClickedCh:
 			systray.Quit()
@@ -182,6 +315,7 @@ func runServiceInstallDialog() bool {
 			slog.Error("setup: system install failed", "err", err)
 			return false
 		}
+		captureAndSaveUserContext()
 		return true
 	}
 
@@ -194,6 +328,7 @@ func runServiceInstallDialog() bool {
 		return false
 	}
 	_ = service.Control(svc, "start")
+	captureAndSaveUserContext()
 	return true
 }
 
@@ -341,8 +476,39 @@ func installService(level internalsvc.InstallLevel) {
 	if err != nil {
 		return
 	}
-	_ = service.Control(svc, "install")
+	if err := service.Control(svc, "install"); err != nil {
+		slog.Warn("tray: service install failed", "level", level, "err", err)
+		return
+	}
 	_ = service.Control(svc, "start")
+	captureAndSaveUserContext()
+}
+
+// captureAndSaveUserContext saves the current user's HomeDir, Shell, and UID
+// into the daemon's database. Must be called while still in the user's
+// interactive session (before the daemon takes over under launchd).
+func captureAndSaveUserContext() {
+	uc := config.CaptureUserContext()
+	if uc == nil {
+		return
+	}
+	s, err := store.Open(platform.DBPath())
+	if err != nil {
+		slog.Warn("tray: could not open store for UserContext capture", "err", err)
+		return
+	}
+	defer s.Close()
+	cfg, err := s.GetConfig(context.Background())
+	if err != nil {
+		slog.Warn("tray: could not load config for UserContext capture", "err", err)
+		return
+	}
+	cfg.UserContext = uc
+	if err := s.SaveConfig(context.Background(), cfg); err != nil {
+		slog.Warn("tray: failed to save user context", "err", err)
+		return
+	}
+	slog.Info("tray: captured user context", "home", uc.HomeDir, "shell", uc.Shell)
 }
 
 func uninstallService() {

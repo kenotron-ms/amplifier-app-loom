@@ -3,6 +3,7 @@ package service
 import (
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"github.com/kardianos/service"
@@ -12,6 +13,10 @@ const (
 	ServiceName        = "agent-daemon"
 	ServiceDisplayName = "Agent Daemon"
 	ServiceDescription = "Scheduled job execution daemon with web UI and natural language interface"
+
+	// LaunchAgentPlistName is the filename used by the kardianos/service library
+	// for the macOS LaunchAgent plist (~/Library/LaunchAgents/).
+	LaunchAgentPlistName = ServiceName + ".plist" // "agent-daemon.plist"
 )
 
 // InstallLevel controls whether the service is installed for the current user
@@ -43,9 +48,25 @@ func (p *Program) Stop(s service.Service) error {
 	return nil
 }
 
+// resolveExePath returns the real path of the running executable,
+// resolving any symlinks. Falls back to the original path on error.
+func resolveExePath() string {
+	exePath, _ := os.Executable()
+	if resolved, err := filepath.EvalSymlinks(exePath); err == nil {
+		return resolved
+	} else {
+		slog.Warn("service: could not resolve symlinks for executable path, using original",
+			"path", exePath, "err", err)
+	}
+	return exePath
+}
+
 // BuildServiceConfig returns the kardianos service config for the given install level.
 func BuildServiceConfig(level InstallLevel) *service.Config {
-	exePath, _ := os.Executable()
+	// Resolve symlinks so the LaunchAgent plist always points to the real binary
+	// inside the .app bundle — this ensures TCC grants to com.ms.agent-daemon apply
+	// to the daemon process (same TCC identity as the tray).
+	exePath := resolveExePath()
 	cfg := &service.Config{
 		Name:        ServiceName,
 		DisplayName: ServiceDisplayName,
