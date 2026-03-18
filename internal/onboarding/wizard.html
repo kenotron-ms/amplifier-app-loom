@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Daemon Setup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    background: #f5f5f7;
+    color: #1d1d1f;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-user-select: none;
+  }
+
+  /* ── Step indicator ──────────────────────────────────────── */
+  .steps {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 20px 24px 0;
+  }
+  .step-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #6e6e73;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: #e5e5ea;
+  }
+  .step-pill.active {
+    background: #0071e3;
+    color: white;
+  }
+  .step-pill.done {
+    background: #34c759;
+    color: white;
+  }
+  .step-num { font-weight: 600; }
+
+  /* ── Content area ────────────────────────────────────────── */
+  .content {
+    flex: 1;
+    padding: 24px 32px 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  .step-view { display: none; flex-direction: column; flex: 1; }
+  .step-view.active { display: flex; }
+
+  /* Step 1 – Welcome */
+  .welcome-icon {
+    width: 72px; height: 72px;
+    background: linear-gradient(145deg, #1c1c1e, #3a3a3c);
+    border-radius: 16px;
+    margin: 8px auto 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px;
+  }
+  h1 { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 10px; }
+  .subtitle {
+    font-size: 14px; color: #6e6e73; text-align: center;
+    line-height: 1.5; max-width: 340px; margin: 0 auto;
+  }
+
+  /* Step 2 – API Keys */
+  .section-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .section-sub { font-size: 13px; color: #6e6e73; margin-bottom: 18px; line-height: 1.4; }
+  .field-label {
+    font-size: 12px; font-weight: 600; color: #1d1d1f;
+    margin-bottom: 4px; display: flex; align-items: center; gap: 4px;
+  }
+  .field-optional { font-weight: 400; color: #8e8e93; font-size: 11px; }
+  .field-wrap { margin-bottom: 14px; position: relative; }
+  .field-input {
+    width: 100%;
+    padding: 9px 36px 9px 12px;
+    border: 1px solid #d1d1d6;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: "SF Mono", Menlo, monospace;
+    background: white;
+    color: #1d1d1f;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field-input:focus { border-color: #0071e3; box-shadow: 0 0 0 3px rgba(0,113,227,0.15); }
+  .field-input.error { border-color: #ff3b30; }
+  .field-check {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    font-size: 16px; display: none;
+  }
+  .field-check.show { display: block; }
+  .field-error { font-size: 11px; color: #ff3b30; margin-top: 3px; display: none; }
+  .field-error.show { display: block; }
+  .trust-note {
+    font-size: 11px; color: #8e8e93; background: #e8f4fd;
+    border-radius: 8px; padding: 9px 12px; line-height: 1.4; margin-top: 4px;
+  }
+
+  /* Step 3 – Permissions */
+  .perm-row {
+    display: flex; align-items: center; gap: 12px;
+    background: white; border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 14px;
+    border: 1px solid #e5e5ea;
+  }
+  .perm-icon { font-size: 22px; }
+  .perm-text { flex: 1; }
+  .perm-name { font-size: 14px; font-weight: 600; }
+  .perm-desc { font-size: 12px; color: #6e6e73; margin-top: 2px; }
+  .settings-btn {
+    padding: 7px 14px; border: 1.5px solid #0071e3; background: white;
+    color: #0071e3; border-radius: 8px; font-size: 13px; font-weight: 500;
+    cursor: pointer; white-space: nowrap; transition: all 0.15s;
+  }
+  .settings-btn:hover { background: #0071e3; color: white; }
+  .settings-btn:disabled { opacity: 0.5; cursor: default; }
+  .wait-msg {
+    font-size: 12px; color: #8e8e93; text-align: center;
+    margin-top: 4px; display: none;
+  }
+  .wait-msg.show { display: block; }
+  .guide-img {
+    width: 100%; border-radius: 8px;
+    border: 1px solid #e5e5ea; margin-top: 4px;
+  }
+  .err-msg {
+    font-size: 12px; color: #ff3b30; background: #fff0ee;
+    border-radius: 8px; padding: 9px 12px; margin-top: 8px; display: none;
+  }
+  .err-msg.show { display: block; }
+
+  /* ── Footer ──────────────────────────────────────────────── */
+  .footer {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 32px 20px;
+    border-top: 1px solid #e5e5ea;
+    background: #f5f5f7;
+  }
+  .btn {
+    padding: 9px 20px; border-radius: 8px; font-size: 14px;
+    font-weight: 500; cursor: pointer; border: none; transition: all 0.15s;
+  }
+  .btn-back { background: transparent; color: #0071e3; border: 1.5px solid #d1d1d6; }
+  .btn-back:hover { border-color: #0071e3; }
+  .btn-primary { background: #0071e3; color: white; }
+  .btn-primary:hover { background: #0062c5; }
+  .btn-primary:disabled { background: #c7c7cc; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<!-- Step indicators -->
+<div class="steps" id="steps">
+  <div class="step-pill active" id="pill-1"><span class="step-num">1</span> Welcome</div>
+  <div class="step-pill" id="pill-2"><span class="step-num">2</span> API Keys</div>
+  <div class="step-pill" id="pill-3"><span class="step-num">3</span> Permissions</div>
+</div>
+
+<div class="content">
+  <!-- Step 1: Welcome -->
+  <div class="step-view active" id="step-1">
+    <div class="welcome-icon">🤖</div>
+    <h1>Welcome to Agent Daemon</h1>
+    <p class="subtitle">Your AI-powered job scheduler. Let&#x2019;s get you set up in three quick steps.</p>
+  </div>
+
+  <!-- Step 2: API Keys -->
+  <div class="step-view" id="step-2">
+    <div class="section-title">Connect your AI</div>
+    <p class="section-sub">Agent Daemon needs an API key to run AI-powered jobs. Add at least one.</p>
+
+    <div class="field-wrap">
+      <div class="field-label">Anthropic API Key</div>
+      <input class="field-input" id="anthropic-key" type="password"
+             placeholder="sk-ant-..." autocomplete="off"
+             value="{{ANTHROPIC_KEY}}">
+      <span class="field-check" id="ant-check">&#x2705;</span>
+      <div class="field-error" id="ant-error">Anthropic API key is required</div>
+    </div>
+
+    <div class="field-wrap">
+      <div class="field-label">OpenAI API Key <span class="field-optional">(Optional)</span></div>
+      <input class="field-input" id="openai-key" type="password"
+             placeholder="sk-..." autocomplete="off"
+             value="{{OPENAI_KEY}}">
+      <span class="field-check" id="oai-check">&#x2705;</span>
+    </div>
+
+    <div class="trust-note">&#x1F512; Keys are stored locally in the app database and only sent to the respective AI providers.</div>
+  </div>
+
+  <!-- Step 3: Permissions -->
+  <div class="step-view" id="step-3">
+    <div class="section-title">Grant Full Disk Access</div>
+    <p class="section-sub">The background service needs Full Disk Access to run jobs, source shell configs, and find tools like <code>.nvm</code> and <code>.amplifier</code>.</p>
+
+    <div class="perm-row" id="perm-row">
+      <div class="perm-icon" id="perm-icon">&#x26A0;&#xFE0F;</div>
+      <div class="perm-text">
+        <div class="perm-name">Full Disk Access</div>
+        <div class="perm-desc" id="perm-desc">Required &#xB7; Background service</div>
+      </div>
+      <button class="settings-btn" id="settings-btn" onclick="openSettings()">Open System Settings &#x2192;</button>
+    </div>
+
+    <div class="wait-msg" id="wait-msg">&#x23F3; Waiting for permission&#x2026; (it&#x2019;s OK to switch back here)</div>
+    <img class="guide-img" id="guide-img" src="{{FDA_GUIDE_DATA_URI}}" alt="System Settings guide" style="display:none">
+    <div class="err-msg" id="err-msg"></div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <button class="btn btn-back" id="btn-back" style="visibility:hidden" onclick="goBack()">&#x2190; Back</button>
+  <div></div>
+  <button class="btn btn-primary" id="btn-next" onclick="goNext()">Get Started &#x2192;</button>
+</div>
+
+<script>
+  var currentStep = 1;
+  var fdaGranted  = {{FDA_GRANTED}};
+
+  function post(action, payload) {
+    window.webkit.messageHandlers.agent.postMessage({ action: action, payload: payload || "" });
+  }
+
+  function updateStepUI() {
+    for (var i = 1; i <= 3; i++) {
+      var pill = document.getElementById("pill-" + i);
+      var view = document.getElementById("step-" + i);
+      pill.className = "step-pill";
+      view.className = "step-view";
+      if (i < currentStep)  pill.classList.add("done");
+      if (i === currentStep) { pill.classList.add("active"); view.classList.add("active"); }
+    }
+    var back = document.getElementById("btn-back");
+    var next = document.getElementById("btn-next");
+    back.style.visibility = currentStep > 1 ? "visible" : "hidden";
+    if (currentStep === 1) {
+      next.textContent = "Get Started \u2192";
+      next.disabled = false;
+    } else if (currentStep === 2) {
+      next.textContent = "Continue \u2192";
+      updateContinueState();
+    } else {
+      next.textContent = "Done";
+      next.disabled = !fdaGranted;
+      if (fdaGranted) markFDAGranted();
+    }
+  }
+
+  function updateContinueState() {
+    var key = document.getElementById("anthropic-key").value.trim();
+    document.getElementById("btn-next").disabled = (key === "");
+    document.getElementById("ant-check").className = "field-check" + (key ? " show" : "");
+    var ok = document.getElementById("openai-key").value.trim();
+    document.getElementById("oai-check").className = "field-check" + (ok ? " show" : "");
+  }
+
+  function goNext() {
+    if (currentStep === 1) {
+      currentStep = 2;
+      updateStepUI();
+    } else if (currentStep === 2) {
+      var key = document.getElementById("anthropic-key").value.trim();
+      if (!key) {
+        document.getElementById("anthropic-key").classList.add("error");
+        document.getElementById("ant-error").classList.add("show");
+        return;
+      }
+      post("setAnthropicKey", key);
+      post("setOpenAIKey", document.getElementById("openai-key").value.trim());
+      currentStep = 3;
+      updateStepUI();
+    } else if (currentStep === 3 && fdaGranted) {
+      document.getElementById("btn-next").disabled = true;
+      document.getElementById("btn-next").textContent = "Setting up\u2026";
+      post("done", "");
+    }
+  }
+
+  function goBack() {
+    if (currentStep > 1) { currentStep--; updateStepUI(); }
+  }
+
+  function openSettings() {
+    var btn = document.getElementById("settings-btn");
+    btn.disabled = true;
+    btn.textContent = "Waiting\u2026";
+    document.getElementById("wait-msg").classList.add("show");
+    document.getElementById("guide-img").style.display = "block";
+    post("openSettings", "");
+  }
+
+  function markFDAGranted() {
+    document.getElementById("perm-icon").textContent = "\u2705";
+    document.getElementById("perm-desc").textContent = "Full Disk Access granted \u2713";
+    document.getElementById("settings-btn").style.display = "none";
+    document.getElementById("wait-msg").classList.remove("show");
+    document.getElementById("btn-next").disabled = false;
+  }
+
+  window.addEventListener("fdaGranted", function() {
+    fdaGranted = true;
+    markFDAGranted();
+  });
+
+  window.addEventListener("installError", function(e) {
+    var msg = e.detail && e.detail.msg ? e.detail.msg : "An error occurred during install.";
+    var el = document.getElementById("err-msg");
+    el.textContent = "\u26A0 " + msg + " \u2014 try again or run `agent-daemon install` in the terminal.";
+    el.classList.add("show");
+    var btn = document.getElementById("btn-next");
+    btn.disabled = false;
+    btn.textContent = "Done";
+  });
+
+  document.getElementById("anthropic-key").addEventListener("input", function() {
+    document.getElementById("anthropic-key").classList.remove("error");
+    document.getElementById("ant-error").classList.remove("show");
+    updateContinueState();
+  });
+  document.getElementById("openai-key").addEventListener("input", updateContinueState);
+
+  updateStepUI();
+  updateContinueState();
+</script>
+</body>
+</html>
