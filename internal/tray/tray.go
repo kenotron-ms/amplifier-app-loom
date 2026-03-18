@@ -3,6 +3,7 @@
 package tray
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -17,7 +18,10 @@ import (
 	"github.com/kardianos/service"
 
 	"github.com/ms/agent-daemon/internal/api"
+	"github.com/ms/agent-daemon/internal/config"
+	"github.com/ms/agent-daemon/internal/platform"
 	internalsvc "github.com/ms/agent-daemon/internal/service"
+	"github.com/ms/agent-daemon/internal/store"
 	"github.com/ms/agent-daemon/internal/updater"
 )
 
@@ -194,6 +198,7 @@ func runServiceInstallDialog() bool {
 		return false
 	}
 	_ = service.Control(svc, "start")
+	captureAndSaveUserContext()
 	return true
 }
 
@@ -343,6 +348,33 @@ func installService(level internalsvc.InstallLevel) {
 	}
 	_ = service.Control(svc, "install")
 	_ = service.Control(svc, "start")
+	captureAndSaveUserContext()
+}
+
+// captureAndSaveUserContext saves the current user's HomeDir, Shell, and UID
+// into the daemon's database. Must be called while still in the user's
+// interactive session (before the daemon takes over under launchd).
+func captureAndSaveUserContext() {
+	uc := config.CaptureUserContext()
+	if uc == nil {
+		return
+	}
+	s, err := store.Open(platform.DBPath())
+	if err != nil {
+		slog.Warn("tray: could not open store for UserContext capture", "err", err)
+		return
+	}
+	defer s.Close()
+	cfg, err := s.GetConfig(context.Background())
+	if err != nil {
+		return
+	}
+	cfg.UserContext = uc
+	if err := s.SaveConfig(context.Background(), cfg); err != nil {
+		slog.Warn("tray: failed to save user context", "err", err)
+		return
+	}
+	slog.Info("tray: captured user context", "home", uc.HomeDir, "shell", uc.Shell)
 }
 
 func uninstallService() {
