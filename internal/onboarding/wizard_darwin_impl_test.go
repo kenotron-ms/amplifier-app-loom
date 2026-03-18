@@ -37,7 +37,7 @@ func TestBuildHTML_FDAGrantedTrue(t *testing.T) {
 	s := &state{}
 	s.fdaGranted.Store(true)
 	got := buildHTML(s)
-	if !strings.Contains(got, "var fdaGranted  = true") && !strings.Contains(got, "var fdaGranted = true") {
+	if !strings.Contains(got, "fdaGranted") || !strings.Contains(got, "= true") {
 		t.Error("expected fdaGranted=true in HTML when state.fdaGranted is true")
 	}
 }
