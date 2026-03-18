@@ -186,6 +186,7 @@ func runServiceInstallDialog() bool {
 			slog.Error("setup: system install failed", "err", err)
 			return false
 		}
+		captureAndSaveUserContext()
 		return true
 	}
 
@@ -346,7 +347,10 @@ func installService(level internalsvc.InstallLevel) {
 	if err != nil {
 		return
 	}
-	_ = service.Control(svc, "install")
+	if err := service.Control(svc, "install"); err != nil {
+		slog.Warn("tray: service install failed", "level", level, "err", err)
+		return
+	}
 	_ = service.Control(svc, "start")
 	captureAndSaveUserContext()
 }
@@ -367,6 +371,7 @@ func captureAndSaveUserContext() {
 	defer s.Close()
 	cfg, err := s.GetConfig(context.Background())
 	if err != nil {
+		slog.Warn("tray: could not load config for UserContext capture", "err", err)
 		return
 	}
 	cfg.UserContext = uc
