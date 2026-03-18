@@ -16,21 +16,23 @@ const openAIEndpoint = "https://api.openai.com/v1/chat/completions"
 
 // OpenAIClient implements NLClient using the OpenAI Chat Completions API.
 type OpenAIClient struct {
-	apiKey string
-	model  string
-	store  store.Store
-	http   *http.Client
+	apiKey    string
+	model     string
+	store     store.Store
+	scheduler JobScheduler
+	http      *http.Client
 }
 
-func NewOpenAIClient(apiKey, model string, s store.Store) *OpenAIClient {
+func NewOpenAIClient(apiKey, model string, s store.Store, sched JobScheduler) *OpenAIClient {
 	if model == "" {
 		model = "gpt-4o"
 	}
 	return &OpenAIClient{
-		apiKey: apiKey,
-		model:  model,
-		store:  s,
-		http:   &http.Client{},
+		apiKey:    apiKey,
+		model:     model,
+		store:     s,
+		scheduler: sched,
+		http:      &http.Client{},
 	}
 }
 
@@ -132,7 +134,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, userMessage string, history []t
 
 		// Execute each tool call
 		for _, tc := range msg.ToolCalls {
-			result, action, execErr := executeTool(ctx, c.store, tc.Function.Name, json.RawMessage(tc.Function.Arguments))
+			result, action, execErr := executeTool(ctx, c.store, c.scheduler, tc.Function.Name, json.RawMessage(tc.Function.Arguments))
 			var content string
 			if execErr != nil {
 				content = fmt.Sprintf("Error: %v", execErr)

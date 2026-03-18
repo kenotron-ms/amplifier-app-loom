@@ -91,18 +91,19 @@ Be concise. Confirm what actions you took.`
 
 // AnthropicClient wraps the Anthropic SDK for job management conversations.
 type AnthropicClient struct {
-	client anthropic.Client
-	model  anthropic.Model
-	store  store.Store
+	client    anthropic.Client
+	model     anthropic.Model
+	store     store.Store
+	scheduler JobScheduler
 }
 
-func NewAnthropicClient(apiKey, model string, s store.Store) *AnthropicClient {
+func NewAnthropicClient(apiKey, model string, s store.Store, sched JobScheduler) *AnthropicClient {
 	c := anthropic.NewClient(option.WithAPIKey(apiKey))
 	m := anthropic.Model(model)
 	if m == "" {
 		m = anthropic.ModelClaudeSonnet4_6
 	}
-	return &AnthropicClient{client: c, model: m, store: s}
+	return &AnthropicClient{client: c, model: m, store: s, scheduler: sched}
 }
 
 // Chat processes a natural language message, executes any tool calls, and returns the response.
@@ -166,7 +167,7 @@ func (c *AnthropicClient) Chat(ctx context.Context, userMessage string, history 
 			}
 			toolUse := block.AsToolUse()
 
-			result, action, execErr := executeTool(ctx, c.store, toolUse.Name, toolUse.Input)
+			result, action, execErr := executeTool(ctx, c.store, c.scheduler, toolUse.Name, toolUse.Input)
 			if execErr != nil {
 				result = fmt.Sprintf("Error: %v", execErr)
 			} else {
@@ -206,12 +207,12 @@ func (c *AnthropicClient) Ping(ctx context.Context) error {
 }
 
 // executeTool is a package-level function so both AnthropicClient and OpenAIClient can use it.
-func executeTool(ctx context.Context, s store.Store, toolName string, input json.RawMessage) (string, string, error) {
+func executeTool(ctx context.Context, s store.Store, sched JobScheduler, toolName string, input json.RawMessage) (string, string, error) {
 	switch toolName {
 	case "create_job":
 		return executeCreateJob(ctx, s, input)
 	case "update_job":
-		return executeUpdateJob(ctx, s, input)
+		return executeUpdateJob(ctx, s, sched, input)
 	case "delete_job":
 		return executeDeleteJob(ctx, s, input)
 	default:

@@ -236,7 +236,7 @@ func executeCreateJob(ctx context.Context, s store.Store, input json.RawMessage)
 	return fmt.Sprintf(`{"id":"%s","name":"%s","status":"created"}`, job.ID, job.Name), action, nil
 }
 
-func executeUpdateJob(ctx context.Context, s store.Store, input json.RawMessage) (string, string, error) {
+func executeUpdateJob(ctx context.Context, s store.Store, sched JobScheduler, input json.RawMessage) (string, string, error) {
 	var p jobParams
 	if err := json.Unmarshal(input, &p); err != nil {
 		return "", "", err
@@ -267,6 +267,8 @@ func executeUpdateJob(ctx context.Context, s store.Store, input json.RawMessage)
 	}
 	if p.TriggerType != "" {
 		job.Trigger.Type = types.TriggerType(p.TriggerType)
+	}
+	if p.TriggerSchedule != "" {
 		job.Trigger.Schedule = p.TriggerSchedule
 	}
 	// Apply executor config: if the AI didn't pass executor explicitly, fall back
@@ -280,6 +282,10 @@ func executeUpdateJob(ctx context.Context, s store.Store, input json.RawMessage)
 
 	if err := s.SaveJob(ctx, job); err != nil {
 		return "", "", fmt.Errorf("save job: %w", err)
+	}
+	if sched != nil {
+		sched.RemoveJob(job.ID)
+		sched.AddJob(job)
 	}
 	action := fmt.Sprintf("Updated job '%s' (id: %s)", job.Name, job.ID)
 	return fmt.Sprintf(`{"id":"%s","name":"%s","status":"updated"}`, job.ID, job.Name), action, nil
