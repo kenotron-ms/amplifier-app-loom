@@ -115,6 +115,20 @@ if [ "$SKIP_DOWNLOAD" = false ]; then
   fi
 fi
 
+# ── macOS: ensure binary symlink exists in PATH ────────────────────────────────
+
+if [ "$OS" = "darwin" ]; then
+  APP_BINARY="/Applications/${APP_NAME}.app/Contents/MacOS/${BINARY}"
+  if [ ! -f "${INSTALL_DIR}/${BINARY}" ] || [ "$(readlink "${INSTALL_DIR}/${BINARY}" 2>/dev/null)" != "$APP_BINARY" ]; then
+    if [ -w "$INSTALL_DIR" ]; then
+      ln -sf "$APP_BINARY" "${INSTALL_DIR}/${BINARY}"
+    else
+      sudo ln -sf "$APP_BINARY" "${INSTALL_DIR}/${BINARY}"
+    fi
+    success "Symlinked agent-daemon to $INSTALL_DIR"
+  fi
+fi
+
 # ── Register + start background service ───────────────────────────────────────
 
 echo ""
