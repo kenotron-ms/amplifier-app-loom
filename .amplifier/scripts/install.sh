@@ -129,6 +129,9 @@ if [ "$OS" = "darwin" ]; then
   fi
 fi
 
+# Ensure the install dir is in PATH for the rest of this script
+export PATH="$INSTALL_DIR:$PATH"
+
 # ── Register + start background service ───────────────────────────────────────
 
 echo ""
