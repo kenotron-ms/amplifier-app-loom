@@ -7,7 +7,6 @@ set -euo pipefail
 REPO="kenotron-ms/agent-daemon"
 BINARY="agent-daemon"
 APP_NAME="AgentDaemon"
-INSTALL_DIR="/usr/local/bin"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -30,6 +29,25 @@ case "$OS" in
   *) die "Unsupported OS: $OS (Windows: download from https://github.com/$REPO/releases)" ;;
 esac
 
+# ── Resolve a writable bin dir (no sudo required) ─────────────────────────────
+# Prefer /usr/local/bin if writable, otherwise use ~/.local/bin.
+
+if [ -w "/usr/local/bin" ]; then
+  BIN_DIR="/usr/local/bin"
+else
+  BIN_DIR="$HOME/.local/bin"
+  mkdir -p "$BIN_DIR"
+  # Persist to shell profile if not already there
+  for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile"; do
+    if [ -f "$rc" ] && ! grep -q "$BIN_DIR" "$rc" 2>/dev/null; then
+      echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$rc"
+    fi
+  done
+fi
+
+# Make sure BIN_DIR is in PATH for the rest of this script
+export PATH="$BIN_DIR:$PATH"
+
 # ── Fetch latest release metadata ─────────────────────────────────────────────
 
 API_URL="https://api.github.com/repos/${REPO}/releases/latest"
@@ -40,13 +58,15 @@ VERSION="$(echo "$RELEASE_JSON" | grep '"tag_name"' | head -1 | sed 's/.*"tag_na
 
 SKIP_DOWNLOAD=false
 if [ "$OS" = "darwin" ] && [ -d "/Applications/${APP_NAME}.app" ]; then
-  CURRENT="$("$INSTALL_DIR/$BINARY" version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")"
-  info "${APP_NAME}.app $CURRENT already installed in /Applications"
+  CURRENT="$("${APP_NAME}.app/Contents/MacOS/${BINARY}" version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+  CURRENT="${CURRENT:-unknown}"
+  info "${APP_NAME}.app ${CURRENT} already installed in /Applications"
   info "Run 'agent-daemon update' to upgrade to $VERSION."
   SKIP_DOWNLOAD=true
 elif [ "$OS" = "linux" ] && command -v "$BINARY" &>/dev/null; then
-  CURRENT="$(agent-daemon version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")"
-  info "agent-daemon $CURRENT already installed at $(command -v $BINARY)"
+  CURRENT="$(agent-daemon version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+  CURRENT="${CURRENT:-unknown}"
+  info "agent-daemon ${CURRENT} already installed at $(command -v $BINARY)"
   info "Run 'agent-daemon update' to upgrade to $VERSION."
   SKIP_DOWNLOAD=true
 fi
@@ -60,7 +80,7 @@ if [ "$SKIP_DOWNLOAD" = false ]; then
   info "Platform: ${OS}/${ARCH}"
 
   if [ "$OS" = "darwin" ]; then
-    # ── macOS: download DMG, install .app, symlink binary ──────────────────────
+    # ── macOS: download DMG → install .app → symlink binary ────────────────────
 
     ASSET="${BINARY}-${OS}-${ARCH}.dmg"
     DOWNLOAD_URL="$(echo "$RELEASE_JSON" | grep "browser_download_url" | grep "\"${ASSET}\"" | sed 's/.*"browser_download_url": *"\(.*\)".*/\1/')"
@@ -75,23 +95,12 @@ if [ "$SKIP_DOWNLOAD" = false ]; then
     hdiutil attach "$TMP_DMG" -mountpoint "$MOUNT_POINT" -nobrowse -quiet
 
     info "Installing ${APP_NAME}.app to /Applications..."
-    if [ -d "/Applications/${APP_NAME}.app" ]; then
-      rm -rf "/Applications/${APP_NAME}.app"
-    fi
+    [ -d "/Applications/${APP_NAME}.app" ] && rm -rf "/Applications/${APP_NAME}.app"
     cp -R "$MOUNT_POINT/${APP_NAME}.app" /Applications/
 
     hdiutil detach "$MOUNT_POINT" -quiet
     rm -f "$TMP_DMG"
     success "${APP_NAME}.app installed to /Applications"
-
-    # Symlink binary so it's available in PATH
-    APP_BINARY="/Applications/${APP_NAME}.app/Contents/MacOS/${BINARY}"
-    if [ -w "$INSTALL_DIR" ]; then
-      ln -sf "$APP_BINARY" "${INSTALL_DIR}/${BINARY}"
-    else
-      sudo ln -sf "$APP_BINARY" "${INSTALL_DIR}/${BINARY}"
-    fi
-    success "Symlinked agent-daemon to $INSTALL_DIR"
 
   else
     # ── Linux: download raw binary ──────────────────────────────────────────────
@@ -104,33 +113,20 @@ if [ "$SKIP_DOWNLOAD" = false ]; then
     TMP="$(mktemp)"
     curl -fsSL --progress-bar "$DOWNLOAD_URL" -o "$TMP"
     chmod +x "$TMP"
-
-    if [ -w "$INSTALL_DIR" ]; then
-      mv "$TMP" "${INSTALL_DIR}/${BINARY}"
-    else
-      info "Installing to $INSTALL_DIR (requires sudo)..."
-      sudo mv "$TMP" "${INSTALL_DIR}/${BINARY}"
-    fi
-    success "Binary installed to ${INSTALL_DIR}/${BINARY}"
+    mv "$TMP" "${BIN_DIR}/${BINARY}"
+    success "Binary installed to ${BIN_DIR}/${BINARY}"
   fi
 fi
 
-# ── macOS: ensure binary symlink exists in PATH ────────────────────────────────
+# ── macOS: ensure binary symlink exists in BIN_DIR ────────────────────────────
 
 if [ "$OS" = "darwin" ]; then
   APP_BINARY="/Applications/${APP_NAME}.app/Contents/MacOS/${BINARY}"
-  if [ ! -f "${INSTALL_DIR}/${BINARY}" ] || [ "$(readlink "${INSTALL_DIR}/${BINARY}" 2>/dev/null)" != "$APP_BINARY" ]; then
-    if [ -w "$INSTALL_DIR" ]; then
-      ln -sf "$APP_BINARY" "${INSTALL_DIR}/${BINARY}"
-    else
-      sudo ln -sf "$APP_BINARY" "${INSTALL_DIR}/${BINARY}"
-    fi
-    success "Symlinked agent-daemon to $INSTALL_DIR"
+  if [ ! -e "${BIN_DIR}/${BINARY}" ]; then
+    ln -sf "$APP_BINARY" "${BIN_DIR}/${BINARY}"
+    success "Symlinked agent-daemon → $BIN_DIR"
   fi
 fi
-
-# Ensure the install dir is in PATH for the rest of this script
-export PATH="$INSTALL_DIR:$PATH"
 
 # ── Register + start background service ───────────────────────────────────────
 
