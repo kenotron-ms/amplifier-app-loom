@@ -62,7 +62,7 @@ func (r *Runner) execAmplifierPrompt(ctx context.Context, job *types.Job, cfg *t
 	return allOutput.String(), 0, nil
 }
 
-// execAmplifierRecipe runs a recipe via `amplifier tool invoke recipe_execute`.
+// execAmplifierRecipe runs a recipe via `amplifier tool invoke recipes operation=execute ...`.
 func (r *Runner) execAmplifierRecipe(ctx context.Context, job *types.Job, cfg *types.AmplifierConfig, runID string) (output string, exitCode int, err error) {
 	contextJSON := "{}"
 	if len(cfg.Context) > 0 {
@@ -70,14 +70,17 @@ func (r *Runner) execAmplifierRecipe(ctx context.Context, job *types.Job, cfg *t
 		contextJSON = string(bs)
 	}
 
-	args := []string{
-		"tool", "invoke", "recipe_execute",
+	// `amplifier tool invoke [-b bundle] recipes operation=execute recipe_path=... context=...`
+	args := []string{"tool", "invoke"}
+	if cfg.Bundle != "" {
+		args = append(args, "-b", cfg.Bundle)
+	}
+	args = append(args,
+		"recipes",
+		"operation=execute",
 		fmt.Sprintf("recipe_path=%s", cfg.RecipePath),
 		fmt.Sprintf("context=%s", contextJSON),
-	}
-	if cfg.Bundle != "" {
-		args = append([]string{"--bundle", cfg.Bundle}, args...)
-	}
+	)
 
 	cmd := r.commandFor(ctx, "amplifier", args...)
 	if job.CWD != "" {
