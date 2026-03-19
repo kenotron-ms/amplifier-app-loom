@@ -9,7 +9,7 @@ tools:
     source: git+https://github.com/microsoft/amplifier-module-tool-skills@main
     config:
       skills:
-        - "@agent-daemon:.amplifier/skills"
+        - "git+https://github.com/kenotron-ms/agent-daemon@main#subdirectory=.amplifier/skills"
 
 context:
   include:
