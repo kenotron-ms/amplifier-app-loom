@@ -114,6 +114,20 @@ if [ "$OS" = "darwin" ]; then
   success "Tray app launched"
 fi
 
+# ── Amplifier bundle ───────────────────────────────────────────────────────────
+
+if command -v amplifier &>/dev/null; then
+  echo ""
+  echo "Registering Amplifier app bundle..."
+  echo ""
+  amplifier bundle add "git+https://github.com/kenotron-ms/agent-daemon@main" --app \
+    && success "Amplifier app bundle registered (active in every session)" \
+    || warn "Could not register Amplifier bundle — run manually: amplifier bundle add git+https://github.com/kenotron-ms/agent-daemon@main --app"
+else
+  warn "Amplifier not found — skipping bundle registration."
+  warn "Once installed, run: amplifier bundle add git+https://github.com/kenotron-ms/agent-daemon@main --app"
+fi
+
 # ── Done ───────────────────────────────────────────────────────────────────────
 
 echo ""
@@ -126,7 +140,4 @@ echo "  Web UI:  http://localhost:7700"
 if [ "$OS" = "darwin" ]; then
 echo "  Tray:    Look for the icon in your menu bar"
 fi
-echo ""
-echo "  To let Amplifier control it, add this bundle:"
-echo "  amplifier bundle add github.com/kenotron-ms/agent-daemon --local"
 echo ""
