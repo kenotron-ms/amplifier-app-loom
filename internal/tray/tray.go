@@ -28,7 +28,7 @@ import (
 
 type healthIssue struct {
 	msg     string // shown in menu
-	fixKind string // "apikey" | "fda" | "service"
+	fixKind string // "apikey" | "fda" | "service" | "cli" | "amplifier"
 }
 
 // Run launches the system tray app. Blocks until the user quits.
@@ -39,6 +39,41 @@ func Run(port int) error {
 		func() {},
 	)
 	return nil
+}
+
+func isDaemonRunning(port int) bool {
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://localhost:%d/api/status", port))
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
+}
+
+func isCLIInPath() bool {
+	home, _ := os.UserHomeDir()
+	for _, p := range []string{
+		"/usr/local/bin/agent-daemon",
+		filepath.Join(home, ".local", "bin", "agent-daemon"),
+	} {
+		if _, err := os.Stat(p); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func isAmplifierConnected() bool {
+	amplifierPath, err := exec.LookPath("amplifier")
+	if err != nil {
+		return true // amplifier not installed — nothing to connect
+	}
+	out, err := exec.Command(amplifierPath, "bundle", "list").Output()
+	if err != nil {
+		return true // can't check — don't surface a spurious warning
+	}
+	return strings.Contains(string(out), "agent-daemon")
 }
 
 func checkHealth(port int) []healthIssue {
@@ -58,7 +93,7 @@ func checkHealth(port int) []healthIssue {
 		issues = append(issues, healthIssue{"Full Disk Access missing", "fda"})
 	}
 
-	if !isServiceInstalled() {
+	if !isServiceInstalled() && !isDaemonRunning(port) {
 		issues = append(issues, healthIssue{"Background service not installed", "service"})
 	}
 
@@ -73,6 +108,14 @@ func checkHealth(port int) []healthIssue {
 		if resp.StatusCode != http.StatusOK {
 			issues = append(issues, healthIssue{"Service not responding", "service"})
 		}
+	}
+
+	if !isCLIInPath() {
+		issues = append(issues, healthIssue{"CLI not in terminal PATH", "cli"})
+	}
+
+	if !isAmplifierConnected() {
+		issues = append(issues, healthIssue{"Amplifier not connected", "amplifier"})
 	}
 
 	return issues
@@ -99,10 +142,10 @@ func onReady(port int) {
 	systray.SetTemplateIcon(icon, icon)
 	systray.SetTooltip("agent-daemon")
 
-	// Step 3: if not yet installed as a service, show a setup prompt at the
-	// top of the menu. The user can click it whenever they're ready.
+	// Step 3: show setup prompts for anything not yet configured.
+	// Service prompt: only if plist missing AND daemon not already running.
 	var mSetup *systray.MenuItem
-	if !isServiceInstalled() {
+	if !isServiceInstalled() && !isDaemonRunning(port) {
 		mSetup = systray.AddMenuItem("⚙  Set up background service…", "Install agent-daemon so it starts automatically")
 		systray.AddSeparator()
 	}
@@ -120,9 +163,13 @@ func onReady(port int) {
 	mFixAPIKey := mActionRequired.AddSubMenuItem("Anthropic API key missing   Fix →", "Open settings to add API key")
 	mFixFDA := mActionRequired.AddSubMenuItem("Full Disk Access missing     Fix →", "Open System Settings")
 	mFixService := mActionRequired.AddSubMenuItem("Service not installed         Fix →", "Install background service")
+	mFixCLI := mActionRequired.AddSubMenuItem("CLI not in terminal PATH     Fix →", "Add agent-daemon to PATH")
+	mFixAmplifier := mActionRequired.AddSubMenuItem("Amplifier not connected      Fix →", "Register Amplifier bundle")
 	mFixAPIKey.Hide()
 	mFixFDA.Hide()
 	mFixService.Hide()
+	mFixCLI.Hide()
+	mFixAmplifier.Hide()
 
 	systray.AddSeparator()
 
@@ -197,6 +244,8 @@ func onReady(port int) {
 				mFixAPIKey.Hide()
 				mFixFDA.Hide()
 				mFixService.Hide()
+				mFixCLI.Hide()
+				mFixAmplifier.Hide()
 				for _, iss := range issues {
 					slog.Debug("tray: health issue detected", "msg", iss.msg, "kind", iss.fixKind)
 					switch iss.fixKind {
@@ -206,6 +255,10 @@ func onReady(port int) {
 						mFixFDA.Show()
 					case "service":
 						mFixService.Show()
+					case "cli":
+						mFixCLI.Show()
+					case "amplifier":
+						mFixAmplifier.Show()
 					}
 				}
 				mActionRequired.Show()
@@ -271,6 +324,12 @@ func onReady(port int) {
 		case <-mFixService.ClickedCh:
 			captureAndSaveUserContext()
 			installService(internalsvc.LevelUser)
+
+		case <-mFixCLI.ClickedCh:
+			go installCLIIfNeeded()
+
+		case <-mFixAmplifier.ClickedCh:
+			go connectAmplifier()
 
 		case <-mQuit.ClickedCh:
 			systray.Quit()
@@ -395,6 +454,22 @@ func installCLIIfNeeded() {
 		slog.Info("installed CLI to ~/.local/bin/agent-daemon")
 		addToShellProfile(home, localBin)
 	}
+}
+
+// connectAmplifier registers the agent-daemon bundle as an Amplifier app bundle.
+func connectAmplifier() {
+	amplifierPath, err := exec.LookPath("amplifier")
+	if err != nil {
+		slog.Warn("tray: amplifier not found in PATH")
+		return
+	}
+	out, err := exec.Command(amplifierPath, "bundle", "add",
+		"git+https://github.com/kenotron-ms/agent-daemon@main", "--app").CombinedOutput()
+	if err != nil {
+		slog.Warn("tray: amplifier bundle add failed", "err", err, "out", string(out))
+		return
+	}
+	slog.Info("tray: amplifier bundle registered")
 }
 
 // addToShellProfile appends a PATH export to shell rc files if not already present.
