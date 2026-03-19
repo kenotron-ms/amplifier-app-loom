@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
@@ -38,7 +39,10 @@ Use --system to install system-wide (starts at boot, requires admin/sudo).`,
 			return err
 		}
 		if err := service.Control(svc, "install"); err != nil {
-			return fmt.Errorf("install failed: %w\n\nTip: system-level install requires sudo", err)
+			if !strings.Contains(err.Error(), "already exists") {
+				return fmt.Errorf("install failed: %w\n\nTip: system-level install requires sudo", err)
+			}
+			// Already installed — treat as success.
 		}
 
 		levelStr := "user-level (login items)"
