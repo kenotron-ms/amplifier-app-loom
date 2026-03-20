@@ -361,12 +361,37 @@ func init() {
 
 	addCmd.Flags().String("name", "", "Job name (required)")
 	addCmd.Flags().String("description", "", "Job description")
-	addCmd.Flags().String("trigger", "once", "Trigger type: cron, loop, once")
+	addCmd.Flags().String("trigger", "once",
+		"Trigger type: cron, loop, once, watch (default \"once\")\n"+
+			"  cron:  runs on a cron schedule (--schedule required)\n"+
+			"  loop:  repeats on an interval (--schedule required, e.g. 5m)\n"+
+			"  once:  runs once then auto-disables (--schedule = optional delay)\n"+
+			"  watch: fires when files change (--watch-path required)")
 	addCmd.Flags().String("schedule", "", "Cron expression or duration (e.g. 5m)")
-	addCmd.Flags().String("command", "", "Shell command to run (required)")
 	addCmd.Flags().String("cwd", "", "Working directory")
 	addCmd.Flags().String("timeout", "", "Max execution time (e.g. 30s, 5m)")
 	addCmd.Flags().Int("retries", 0, "Number of retries on failure")
+
+	// Executor selection
+	addCmd.Flags().String("executor", "shell", "Executor type: shell, claude-code, amplifier (default \"shell\")")
+	addCmd.Flags().String("command", "", "Shell command to run (required for --executor shell)")
+	addCmd.Flags().String("prompt", "", "AI prompt text (required for --executor claude-code;\n  required for --executor amplifier unless --recipe is set)")
+	addCmd.Flags().String("recipe", "", "Path to .yaml recipe file (--executor amplifier only;\n  may be combined with --prompt)")
+	addCmd.Flags().String("model", "", "Model override, e.g. \"sonnet\", \"opus\"\n  (AI executors only: claude-code, amplifier)")
+
+	// Watch trigger flags
+	addCmd.Flags().String("watch-path", "", "File or directory to watch (required for --trigger watch)")
+	addCmd.Flags().Bool("watch-recursive", false, "Watch subdirectories recursively")
+	addCmd.Flags().String("watch-events", "",
+		"Comma-separated events to react to:\n"+
+			"  create, write, modify (=write), remove, delete (=remove), rename, chmod\n"+
+			"  Empty or omitted means all events.\n"+
+			"  Note: rename and chmod are not supported by --watch-mode poll.")
+	addCmd.Flags().String("watch-debounce", "", "Quiet window before firing after last event, e.g. \"500ms\"\n  (backend default: 300ms)")
+	addCmd.Flags().String("watch-mode", "notify",
+		"\"notify\" uses OS file events (inotify/FSEvents/kqueue);\n"+
+			"\"poll\" checks on a fixed interval (default \"notify\")")
+	addCmd.Flags().String("watch-poll-interval", "", "Polling interval for --watch-mode poll, e.g. \"2s\"\n  (only valid with --watch-mode poll; backend default: 2s)")
 
 	removeCmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt")
 }
