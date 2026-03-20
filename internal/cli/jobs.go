@@ -371,7 +371,10 @@ var addCmd = &cobra.Command{
 			}
 		}
 
-		body, _ := json.Marshal(job)
+		body, err := json.Marshal(job)
+		if err != nil {
+			return fmt.Errorf("failed to encode job: %w", err)
+		}
 		url := fmt.Sprintf("http://localhost:%d/api/jobs", port)
 		resp, err := http.Post(url, "application/json", bytes.NewReader(body))
 		if err != nil {
@@ -381,13 +384,21 @@ var addCmd = &cobra.Command{
 
 		if resp.StatusCode >= 400 {
 			var errResp map[string]string
-			json.NewDecoder(resp.Body).Decode(&errResp)
+			if jsonErr := json.NewDecoder(resp.Body).Decode(&errResp); jsonErr != nil || errResp["error"] == "" {
+				return fmt.Errorf("server returned %s", resp.Status)
+			}
 			return fmt.Errorf("error: %s", errResp["error"])
 		}
 
 		var created types.Job
-		json.NewDecoder(resp.Body).Decode(&created)
-		fmt.Printf("✓ Job created: %s (id: %s)\n", created.Name, created.ID[:8])
+		if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+			return fmt.Errorf("job was created but response could not be decoded: %w", err)
+		}
+		id := created.ID
+		if len(id) > 8 {
+			id = id[:8]
+		}
+		fmt.Printf("✓ Job created: %s (id: %s)\n", created.Name, id)
 		return nil
 	},
 }
