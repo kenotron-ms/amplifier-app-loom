@@ -373,7 +373,7 @@ func init() {
 	addCmd.Flags().Int("retries", 0, "Number of retries on failure")
 
 	// Executor selection
-	addCmd.Flags().String("executor", "shell", "Executor type: shell, claude-code, amplifier (default \"shell\")")
+	addCmd.Flags().String("executor", "shell", "Executor type: shell, claude-code, amplifier")
 	addCmd.Flags().String("command", "", "Shell command to run (required for --executor shell)")
 	addCmd.Flags().String("prompt", "", "AI prompt text (required for --executor claude-code;\n  required for --executor amplifier unless --recipe is set)")
 	addCmd.Flags().String("recipe", "", "Path to .yaml recipe file (--executor amplifier only;\n  may be combined with --prompt)")
@@ -390,7 +390,7 @@ func init() {
 	addCmd.Flags().String("watch-debounce", "", "Quiet window before firing after last event, e.g. \"500ms\"\n  (backend default: 300ms)")
 	addCmd.Flags().String("watch-mode", "notify",
 		"\"notify\" uses OS file events (inotify/FSEvents/kqueue);\n"+
-			"\"poll\" checks on a fixed interval (default \"notify\")")
+			"  \"poll\" checks on a fixed interval (use --watch-poll-interval to tune)")
 	addCmd.Flags().String("watch-poll-interval", "", "Polling interval for --watch-mode poll, e.g. \"2s\"\n  (only valid with --watch-mode poll; backend default: 2s)")
 
 	removeCmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt")
