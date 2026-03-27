@@ -85,12 +85,12 @@ func (d *Daemon) Run() error {
 	}
 
 	slog.Info("agent-daemon started",
-		"port", d.cfg.Port,
+		"addr", fmt.Sprintf("0.0.0.0:%d", d.cfg.Port),
 		"db", platform.DBPath(),
 		"pid", os.Getpid(),
 	)
 
-	return srv.Start(fmt.Sprintf("localhost:%d", d.cfg.Port))
+	return srv.Start(fmt.Sprintf(":%d", d.cfg.Port))
 }
 
 func (d *Daemon) Shutdown() {
