@@ -1,16 +1,16 @@
-# install.ps1 — download and install agent-daemon on Windows
-# Usage: irm https://raw.githubusercontent.com/kenotron-ms/agent-daemon/main/install.ps1 | iex
+# install.ps1 — download and install loom on Windows
+# Usage: irm https://raw.githubusercontent.com/kenotron-ms/amplifier-app-loom/main/install.ps1 | iex
 #   or with a custom install dir:
 #   $env:INSTALL_DIR="C:\tools"; irm .../install.ps1 | iex
 [CmdletBinding()]
 param(
-    [string]$InstallDir = "$env:LOCALAPPDATA\Programs\agent-daemon"
+    [string]$InstallDir = "$env:LOCALAPPDATA\Programs\loom"
 )
 
 $ErrorActionPreference = "Stop"
-$Repo = "kenotron-ms/agent-daemon"
-$Bin = "agent-daemon.exe"
-$Asset = "agent-daemon-windows-amd64.exe"
+$Repo = "kenotron-ms/amplifier-app-loom"
+$Bin = "loom.exe"
+$Asset = "loom-windows-amd64.exe"
 
 # ── Resolve latest release ─────────────────────────────────────────────────
 Write-Host "Fetching latest release..."
@@ -50,21 +50,21 @@ if (Get-Command amplifier -ErrorAction SilentlyContinue) {
     Write-Host ""
     Write-Host "Registering Amplifier app bundle..."
     try {
-        & amplifier bundle add "git+https://github.com/kenotron-ms/agent-daemon@main" --app
+        & amplifier bundle add "git+https://github.com/kenotron-ms/amplifier-app-loom@main" --app
         Write-Host "✓ Amplifier app bundle registered (active in every session)"
     } catch {
         Write-Host "⚠ Could not register Amplifier bundle — run manually:"
-        Write-Host "    amplifier bundle add git+https://github.com/kenotron-ms/agent-daemon@main --app"
+        Write-Host "    amplifier bundle add git+https://github.com/kenotron-ms/amplifier-app-loom@main --app"
     }
 } else {
     Write-Host ""
     Write-Host "Note: Amplifier not found — skipping bundle registration."
     Write-Host "      Once installed, run:"
-    Write-Host "        amplifier bundle add git+https://github.com/kenotron-ms/agent-daemon@main --app"
+    Write-Host "        amplifier bundle add git+https://github.com/kenotron-ms/amplifier-app-loom@main --app"
 }
 
 Write-Host ""
 Write-Host "Next steps:"
-Write-Host "  agent-daemon install   # register as a user-level service"
-Write-Host "  agent-daemon start     # start the daemon"
+Write-Host "  loom install   # register as a user-level service"
+Write-Host "  loom start     # start the daemon"
 Write-Host "  start http://localhost:7700"

@@ -1,8 +1,8 @@
 package nl
 
 import (
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/store"
 )
 
 // NewClientFromConfig creates the appropriate NLClient based on config.

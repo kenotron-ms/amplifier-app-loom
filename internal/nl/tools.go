@@ -9,8 +9,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/google/uuid"
 
-	"github.com/ms/agent-daemon/internal/store"
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 func tool(name, description string, schema anthropic.ToolInputSchemaParam) anthropic.ToolUnionParam {

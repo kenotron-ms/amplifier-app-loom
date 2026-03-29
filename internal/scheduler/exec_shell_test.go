@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 // TestExecShell_StreamsChunksToBroadcaster runs `echo "line one" && echo "line two"`,

@@ -9,9 +9,9 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/ms/agent-daemon/internal/queue"
-	"github.com/ms/agent-daemon/internal/store"
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/queue"
+	"github.com/ms/amplifier-app-loom/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 // Scheduler manages all job triggers and dispatches to the BoundedQueue.

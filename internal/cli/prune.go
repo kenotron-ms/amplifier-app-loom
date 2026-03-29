@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 var pruneCmd = &cobra.Command{

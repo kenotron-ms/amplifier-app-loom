@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 // sseRunDone is the payload for the SSE "done" event.

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 func (r *Runner) execAmplifier(ctx context.Context, job *types.Job, runID string) (output string, exitCode int, err error) {

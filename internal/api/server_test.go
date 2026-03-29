@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/scheduler"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/scheduler"
 )
 
 // TestNewServer_BroadcasterIsLastParam verifies that NewServer accepts

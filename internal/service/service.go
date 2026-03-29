@@ -10,13 +10,13 @@ import (
 )
 
 const (
-	ServiceName        = "agent-daemon"
-	ServiceDisplayName = "Agent Daemon"
+	ServiceName        = "loom"
+	ServiceDisplayName = "Loom"
 	ServiceDescription = "Scheduled job execution daemon with web UI and natural language interface"
 
 	// LaunchAgentPlistName is the filename used by the kardianos/service library
 	// for the macOS LaunchAgent plist (~/Library/LaunchAgents/).
-	LaunchAgentPlistName = ServiceName + ".plist" // "agent-daemon.plist"
+	LaunchAgentPlistName = ServiceName + ".plist" // "loom.plist"
 )
 
 // InstallLevel controls whether the service is installed for the current user
@@ -64,7 +64,7 @@ func resolveExePath() string {
 // BuildServiceConfig returns the kardianos service config for the given install level.
 func BuildServiceConfig(level InstallLevel) *service.Config {
 	// Resolve symlinks so the LaunchAgent plist always points to the real binary
-	// inside the .app bundle — this ensures TCC grants to com.ms.agent-daemon apply
+	// inside the .app bundle — this ensures TCC grants to com.ms.amplifier-app-loom apply
 	// to the daemon process (same TCC identity as the tray).
 	exePath := resolveExePath()
 	cfg := &service.Config{

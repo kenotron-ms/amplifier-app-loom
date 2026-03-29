@@ -1,4 +1,4 @@
-module github.com/ms/agent-daemon
+module github.com/ms/amplifier-app-loom
 
 go 1.25.6
 

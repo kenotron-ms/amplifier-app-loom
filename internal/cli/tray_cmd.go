@@ -3,14 +3,14 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/tray"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/tray"
 )
 
 var trayCmd = &cobra.Command{
 	Use:   "tray",
 	Short: "Launch the system tray management app",
-	Long: `Launch the agent-daemon system tray app.
+	Long: `Launch the loom system tray app.
 
 The tray app shows daemon status in the menu bar and lets you:
   - Start / stop / pause the daemon
@@ -19,7 +19,7 @@ The tray app shows daemon status in the menu bar and lets you:
 
 The tray app communicates with a running daemon via HTTP.
 The daemon does not need to be installed as a service to use the tray —
-you can also start it manually with 'agent-daemon _serve'.`,
+you can also start it manually with 'loom _serve'.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port, _ := cmd.Flags().GetInt("port")
 		return tray.Run(port)

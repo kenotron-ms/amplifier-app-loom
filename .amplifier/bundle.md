@@ -1,11 +1,11 @@
 ---
 bundle:
-  name: agent-daemon
+  name: loom
   version: 1.0.0
-  description: Agent daemon job scheduler — schedule and manage shell, claude-code, and amplifier jobs via a local daemon at localhost:7700
+  description: Loom job scheduler — schedule and manage shell, claude-code, and amplifier jobs via a local daemon at localhost:7700
 
 includes:
-  - bundle: agent-daemon:behaviors/agent-daemon
+  - bundle: loom:behaviors/loom
 ---
 
-# Agent Daemon Bundle
+# Loom Bundle

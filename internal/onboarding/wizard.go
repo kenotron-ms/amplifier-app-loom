@@ -6,8 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/store"
 )
 
 // OnboardingSteps captures which setup conditions are unmet at wizard launch time.

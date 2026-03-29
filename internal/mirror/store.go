@@ -21,7 +21,7 @@ var (
 )
 
 // MirrorStore provides persistence for the mirror system using the same bbolt
-// database as the rest of agent-daemon. It manages connectors, entities, entity
+// database as the rest of loom. It manages connectors, entities, entity
 // metadata, change records, and a connector→entity index.
 type MirrorStore struct {
 	db *bolt.DB

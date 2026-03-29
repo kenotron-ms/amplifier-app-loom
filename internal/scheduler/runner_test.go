@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ms/agent-daemon/internal/store"
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 // setupRunnerTest creates a temp bolt store, a broadcaster, and a runner.

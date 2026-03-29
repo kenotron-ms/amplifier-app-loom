@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extend `agent-daemon add` to support all trigger types (`cron`, `loop`, `once`, `watch`) and all executor types (`shell`, `claude-code`, `amplifier`) via CLI flags, with comprehensive help text for agent self-discovery.
+**Goal:** Extend `loom add` to support all trigger types (`cron`, `loop`, `once`, `watch`) and all executor types (`shell`, `claude-code`, `amplifier`) via CLI flags, with comprehensive help text for agent self-discovery.
 
 **Architecture:** Single file change — `internal/cli/jobs.go`. Validation is extracted into a pure `validateAddOpts(opts, changedFlags)` function for testability. The `addCmd.RunE` reads flags, calls the validator, then builds typed config structs before POSTing to the daemon API.
 
@@ -26,7 +26,7 @@ No other files change.
 ## Running Tests
 
 ```bash
-cd /Users/ken/workspace/ms/agent-daemon
+cd /Users/ken/workspace/ms/loom
 go test ./internal/cli/... -v
 ```
 
@@ -602,73 +602,73 @@ var addCmd = &cobra.Command{
 	Use:   "add",
 	Short: "Add a new job",
 	Example: `  # Shell command on a cron schedule
-  agent-daemon add --name "Nightly cleanup" --trigger cron --schedule "0 0 2 * * *" \
+  loom add --name "Nightly cleanup" --trigger cron --schedule "0 0 2 * * *" \
     --command "find /tmp -mtime +7 -delete"
 
   # Shell command repeating every 5 minutes
-  agent-daemon add --name "Health check" --trigger loop --schedule 5m \
+  loom add --name "Health check" --trigger loop --schedule 5m \
     --command "curl -sf http://localhost:8080/health"
 
   # Shell command when files change in a directory (with debounce)
-  agent-daemon add --name "Auto-lint" --trigger watch --watch-path ./src \
+  loom add --name "Auto-lint" --trigger watch --watch-path ./src \
     --watch-recursive --watch-debounce 500ms --command "npm run lint"
 
   # Shell command watching for specific events only
-  agent-daemon add --name "On new file" --trigger watch --watch-path ~/inbox \
+  loom add --name "On new file" --trigger watch --watch-path ~/inbox \
     --watch-events create --command "/usr/local/bin/process-new.sh"
 
   # Shell command reacting to multiple events (comma-separated, no spaces)
-  agent-daemon add --name "Compile on change" --trigger watch --watch-path ./src \
+  loom add --name "Compile on change" --trigger watch --watch-path ./src \
     --watch-events "create,write" --command "make build"
 
   # Shell command with explicit notify mode and rename/chmod events
-  agent-daemon add --name "Perms watcher" --trigger watch --watch-path /etc/app \
+  loom add --name "Perms watcher" --trigger watch --watch-path /etc/app \
     --watch-mode notify --watch-events "rename,chmod" --command "/usr/local/bin/audit.sh"
 
   # Watch a network share using poll mode (OS events not available)
-  agent-daemon add --name "NFS watcher" --trigger watch --watch-path /mnt/share \
+  loom add --name "NFS watcher" --trigger watch --watch-path /mnt/share \
     --watch-mode poll --watch-poll-interval 5s --command "/usr/local/bin/sync.sh"
 
   # Claude prompt on a cron schedule (with model override)
-  agent-daemon add --name "Daily standup" --trigger cron --schedule "0 0 9 * * *" \
+  loom add --name "Daily standup" --trigger cron --schedule "0 0 9 * * *" \
     --executor claude-code --model opus --prompt "Summarize my open GitHub issues and PRs"
 
   # Claude prompt when files change
-  agent-daemon add --name "Review on save" --trigger watch --watch-path ./src \
+  loom add --name "Review on save" --trigger watch --watch-path ./src \
     --watch-recursive --watch-events write --watch-debounce 1s \
     --executor claude-code --prompt "Review the changed file for issues"
 
   # Claude prompt repeating on an interval
-  agent-daemon add --name "Periodic check" --trigger loop --schedule 30m \
+  loom add --name "Periodic check" --trigger loop --schedule 30m \
     --executor claude-code --prompt "Check for any new alerts in my monitoring dashboard"
 
   # Claude prompt run once immediately
-  agent-daemon add --name "Onboarding summary" --trigger once \
+  loom add --name "Onboarding summary" --trigger once \
     --executor claude-code --prompt "Summarize the onboarding docs in ~/docs/onboarding"
 
   # Amplifier recipe on an interval
-  agent-daemon add --name "Hourly digest" --trigger loop --schedule 1h \
+  loom add --name "Hourly digest" --trigger loop --schedule 1h \
     --executor amplifier --recipe ~/recipes/digest.yaml
 
   # Amplifier recipe triggered by file watch
-  agent-daemon add --name "Process inbox" --trigger watch --watch-path ~/inbox \
+  loom add --name "Process inbox" --trigger watch --watch-path ~/inbox \
     --executor amplifier --recipe ~/recipes/process-inbox.yaml
 
   # Amplifier prompt with model on a cron schedule
-  agent-daemon add --name "Weekly review" --trigger cron --schedule "0 0 9 * * 1" \
+  loom add --name "Weekly review" --trigger cron --schedule "0 0 9 * * 1" \
     --executor amplifier --model sonnet --prompt "Run my weekly review workflow"
 
   # Amplifier recipe + additional prompt instruction (both may be set)
-  agent-daemon add --name "Guided process" --trigger watch --watch-path ~/docs \
+  loom add --name "Guided process" --trigger watch --watch-path ~/docs \
     --executor amplifier --recipe ~/recipes/process.yaml \
     --prompt "Focus on files modified in the last hour"
 
   # Amplifier recipe run once with a delay
-  agent-daemon add --name "Post-deploy check" --trigger once --schedule 5m \
+  loom add --name "Post-deploy check" --trigger once --schedule 5m \
     --executor amplifier --recipe ~/recipes/post-deploy.yaml
 
   # Run once immediately (default trigger, shell)
-  agent-daemon add --name "Migrate DB" --command "/usr/local/bin/migrate.sh"
+  loom add --name "Migrate DB" --command "/usr/local/bin/migrate.sh"
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port, _ := cmd.Flags().GetInt("port")
@@ -786,7 +786,7 @@ Expected: all tests PASS
 - [ ] **Step 3: Verify it compiles and help text looks right**
 
 ```bash
-go build ./... && go run ./cmd/agent-daemon add --help
+go build ./... && go run ./cmd/loom add --help
 ```
 
 Expected: help text shows all new flags with descriptions. Verify `--trigger` lists `watch`, `--executor` is present, `--watch-path` etc. are present.
@@ -808,12 +808,12 @@ git commit -m "feat(cli): refactor addCmd.RunE — all executors and triggers, t
 go test ./... -v 2>&1 | tail -20
 ```
 
-Expected: `ok github.com/ms/agent-daemon/internal/cli`
+Expected: `ok github.com/ms/loom/internal/cli`
 
 - [ ] **Step 2: Build the binary**
 
 ```bash
-go build -o /tmp/agent-daemon-test ./cmd/agent-daemon
+go build -o /tmp/loom-test ./cmd/loom
 ```
 
 Expected: binary produced with no warnings
@@ -821,7 +821,7 @@ Expected: binary produced with no warnings
 - [ ] **Step 3: Spot-check help text**
 
 ```bash
-/tmp/agent-daemon-test add --help
+/tmp/loom-test add --help
 ```
 
 Verify:
@@ -835,15 +835,15 @@ Verify:
 
 ```bash
 # Should error: watch-path required
-/tmp/agent-daemon-test add --name "x" --trigger watch --command "echo" 2>&1
+/tmp/loom-test add --name "x" --trigger watch --command "echo" 2>&1
 # Expected: --watch-path is required when --trigger watch
 
 # Should error: prompt required for claude-code
-/tmp/agent-daemon-test add --name "x" --executor claude-code 2>&1
+/tmp/loom-test add --name "x" --executor claude-code 2>&1
 # Expected: --prompt is required for executor "claude-code"
 
 # Should error: invalid executor
-/tmp/agent-daemon-test add --name "x" --executor bash --command "echo" 2>&1
+/tmp/loom-test add --name "x" --executor bash --command "echo" 2>&1
 # Expected: invalid executor "bash"
 ```
 

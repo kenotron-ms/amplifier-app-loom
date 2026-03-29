@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 // TestExecClaudeCode_MissingConfig verifies that a nil ClaudeCode config (or

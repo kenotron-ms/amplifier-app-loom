@@ -1,4 +1,4 @@
-// agent-daemon web UI
+// loom web UI
 
 const API = '';
 let daemonState = null;

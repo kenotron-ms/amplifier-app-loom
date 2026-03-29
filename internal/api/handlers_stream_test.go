@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ms/agent-daemon/internal/scheduler"
-	"github.com/ms/agent-daemon/internal/store"
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/scheduler"
+	"github.com/ms/amplifier-app-loom/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 // newTestStreamServer builds a minimal Server with a real bolt store and broadcaster.

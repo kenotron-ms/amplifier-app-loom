@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 const cap64 = 64 * 1024 // 64KB accumulator cap

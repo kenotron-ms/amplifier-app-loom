@@ -19,7 +19,7 @@ import (
 // data source has an API.
 type BrowserFetcher struct {
 	// ProfileDir is the base directory for browser profiles.
-	// Defaults to ~/.agent-daemon/browser-profiles/
+	// Defaults to ~/.loom/browser-profiles/
 	ProfileDir string
 	// Timeout for browser operations. Defaults to 60s.
 	Timeout time.Duration
@@ -28,7 +28,7 @@ type BrowserFetcher struct {
 // NewBrowserFetcher returns a BrowserFetcher with sensible defaults.
 func NewBrowserFetcher(profileDir string) *BrowserFetcher {
 	if profileDir == "" {
-		profileDir = "~/.agent-daemon/browser-profiles"
+		profileDir = "~/.loom/browser-profiles"
 	}
 	return &BrowserFetcher{
 		ProfileDir: profileDir,

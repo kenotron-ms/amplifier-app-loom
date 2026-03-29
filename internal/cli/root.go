@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ms/agent-daemon/internal/api"
-	"github.com/ms/agent-daemon/internal/updater"
+	"github.com/ms/amplifier-app-loom/internal/api"
+	"github.com/ms/amplifier-app-loom/internal/updater"
 	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "agent-daemon",
+	Use:     "loom",
 	Version: api.Version,
 	Short:   "Scheduled job execution daemon with web UI",
-	Long: `agent-daemon — a cross-platform scheduled job runner.
+	Long: `loom — a cross-platform scheduled job runner.
 
 Runs as a system service (launchd / systemd / Windows Service) with:
   - Cron, interval, and immediate job triggers

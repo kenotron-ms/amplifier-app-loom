@@ -7,14 +7,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/ms/agent-daemon/internal/api"
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/mirror"
-	"github.com/ms/agent-daemon/internal/platform"
-	"github.com/ms/agent-daemon/internal/queue"
-	"github.com/ms/agent-daemon/internal/scheduler"
-	"github.com/ms/agent-daemon/internal/store"
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/api"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/mirror"
+	"github.com/ms/amplifier-app-loom/internal/platform"
+	"github.com/ms/amplifier-app-loom/internal/queue"
+	"github.com/ms/amplifier-app-loom/internal/scheduler"
+	"github.com/ms/amplifier-app-loom/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 // Daemon wires together store, scheduler, queue, mirror, and HTTP server.
@@ -129,7 +129,7 @@ func (d *Daemon) Run() error {
 		d.syncEngine.Start(d.ctx)
 	}
 
-	slog.Info("agent-daemon started",
+	slog.Info("loom started",
 		"addr", fmt.Sprintf("0.0.0.0:%d", d.cfg.Port),
 		"db", platform.DBPath(),
 		"pid", os.Getpid(),
@@ -139,7 +139,7 @@ func (d *Daemon) Run() error {
 }
 
 func (d *Daemon) Shutdown() {
-	slog.Info("agent-daemon shutting down")
+	slog.Info("loom shutting down")
 	if d.cancel != nil {
 		d.cancel()
 	}

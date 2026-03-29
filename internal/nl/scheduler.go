@@ -1,6 +1,6 @@
 package nl
 
-import "github.com/ms/agent-daemon/internal/types"
+import "github.com/ms/amplifier-app-loom/internal/types"
 
 // JobScheduler is the minimal interface the NL tool executor needs to keep the
 // live cron scheduler in sync with job changes.  The concrete

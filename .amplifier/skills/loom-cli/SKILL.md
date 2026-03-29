@@ -1,13 +1,13 @@
 ---
-name: agent-daemon-cli
-description: Full command reference for agent-daemon — manage jobs, connectors, and mirror watches via the local scheduler at localhost:7700. Use when creating jobs, setting up service watchers, querying mirrored data, or triggering jobs on external service changes.
+name: loom-cli
+description: Full command reference for loom — manage jobs, connectors, and mirror watches via the local scheduler at localhost:7700. Use when creating jobs, setting up service watchers, querying mirrored data, or triggering jobs on external service changes.
 ---
 
-# agent-daemon — Full Reference
+# loom — Full Reference
 
 Two interfaces to the same daemon at `localhost:7700`:
-- **`agent-daemon` binary** — native Go CLI for all commands including connectors and mirror
-- **`agent-daemon-cli.mjs`** — Node.js wrapper for job/run management (legacy, AI-friendly)
+- **`loom` binary** — native Go CLI for all commands including connectors and mirror
+- **`loom-cli.mjs`** — Node.js wrapper for job/run management (legacy, AI-friendly)
 
 ---
 
@@ -15,12 +15,12 @@ Two interfaces to the same daemon at `localhost:7700`:
 
 ```bash
 # Node.js CLI alias (jobs/runs/daemon control)
-export AGENT_DAEMON_ROOT=$(ls -dt ~/.amplifier/cache/amplifier-bundle-agent-daemon-* 2>/dev/null | head -1)
-[ -f "scripts/agent-daemon-cli.mjs" ] && export AGENT_DAEMON_ROOT="."
-alias ad="node \"$AGENT_DAEMON_ROOT/scripts/agent-daemon-cli.mjs\""
+export LOOM_ROOT=$(ls -dt ~/.amplifier/cache/amplifier-bundle-loom-* 2>/dev/null | head -1)
+[ -f "scripts/loom-cli.mjs" ] && export LOOM_ROOT="."
+alias loom="node \"$LOOM_ROOT/scripts/loom-cli.mjs\""
 
 # Go binary (connector/mirror commands + everything else)
-# Already on PATH if installed: agent-daemon connector ..., agent-daemon mirror ...
+# Already on PATH if installed: loom connector ..., loom mirror ...
 ```
 
 ---
@@ -149,7 +149,7 @@ Interactive setup with AI-assisted validation. For browser connectors, opens a h
 
 ```bash
 # Amazon price watch (browser — no public API)
-agent-daemon connector admit \
+loom connector admit \
   --name "amazon-airpods" \
   --url "https://amazon.com/dp/B09V3KXJPB" \
   --site amazon \
@@ -158,7 +158,7 @@ agent-daemon connector admit \
   --interval 15m
 
 # GitHub PR monitoring (CLI — uses gh)
-agent-daemon connector admit \
+loom connector admit \
   --name "watch-vscode-pr-42" \
   --command "gh api /repos/microsoft/vscode/pulls/42" \
   --entity "github.pr/microsoft/vscode/42" \
@@ -167,7 +167,7 @@ agent-daemon connector admit \
   --interval 60s
 
 # Teams channel messages (CLI — uses m365)
-agent-daemon connector admit \
+loom connector admit \
   --name "watch-teams-general" \
   --command "node $CONNECTOR_M365_ROOT/scripts/teams-agent-cli.mjs messages --channel general --limit 5 --json" \
   --entity "teams.channel/engineering/general" \
@@ -186,7 +186,7 @@ agent-daemon connector admit \
 
 ```bash
 # Command-based connector
-agent-daemon connector add \
+loom connector add \
   --name "github-pr-42" \
   --method command \
   --command "gh api /repos/owner/repo/pulls/42" \
@@ -195,7 +195,7 @@ agent-daemon connector add \
   --interval 60s
 
 # HTTP connector
-agent-daemon connector add \
+loom connector add \
   --name "crypto-btc-price" \
   --method http \
   --url "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd" \
@@ -204,7 +204,7 @@ agent-daemon connector add \
   --interval 5m
 
 # Browser connector (requires profile — use admit for first-time auth)
-agent-daemon connector add \
+loom connector add \
   --name "amazon-airpods" \
   --method browser \
   --url "https://amazon.com/dp/B09V3KXJPB" \
@@ -217,9 +217,9 @@ agent-daemon connector add \
 ### Manage connectors
 
 ```bash
-agent-daemon connector list                  # table: id, name, method, interval, health, last-change
-agent-daemon connector remove <id|name>      # delete connector (mirror data preserved)
-agent-daemon connector remove <id> --purge   # delete connector AND its mirror data
+loom connector list                  # table: id, name, method, interval, health, last-change
+loom connector remove <id|name>      # delete connector (mirror data preserved)
+loom connector remove <id> --purge   # delete connector AND its mirror data
 ```
 
 ### Connector health states
@@ -240,27 +240,27 @@ The mirror stores the current state of all watched entities and a full change lo
 
 ```bash
 # List all watched entities
-agent-daemon mirror entities
+loom mirror entities
 
 # Filter by kind
-agent-daemon mirror entities github.pr
-agent-daemon mirror entities amazon.product
+loom mirror entities github.pr
+loom mirror entities amazon.product
 
 # Get current snapshot of an entity
-agent-daemon mirror get github.pr/owner/repo/42
-agent-daemon mirror get amazon.product/B09V3KXJPB --json
+loom mirror get github.pr/owner/repo/42
+loom mirror get amazon.product/B09V3KXJPB --json
 
 # Get a specific field
-agent-daemon mirror get teams.channel/engineering/general --field last_message
+loom mirror get teams.channel/engineering/general --field last_message
 
 # View change history
-agent-daemon mirror changes                                   # all recent changes
-agent-daemon mirror changes --entity amazon.product/B09V3KXJPB
-agent-daemon mirror changes --entity github.pr/owner/repo/42 --limit 20
-agent-daemon mirror changes --since 1h                        # last hour, all entities
+loom mirror changes                                   # all recent changes
+loom mirror changes --entity amazon.product/B09V3KXJPB
+loom mirror changes --entity github.pr/owner/repo/42 --limit 20
+loom mirror changes --since 1h                        # last hour, all entities
 
 # List connectors with health
-agent-daemon mirror connectors
+loom mirror connectors
 ```
 
 **Entity snapshot** — raw JSON as the connector fetched and extracted it:
@@ -406,10 +406,10 @@ ad clear-runs --json                         # clear all run history
 ## Service Lifecycle
 
 ```bash
-agent-daemon install    # install as launchd / systemd / SCM service
-agent-daemon uninstall
-agent-daemon start
-agent-daemon stop
+loom install    # install as launchd / systemd / SCM service
+loom uninstall
+loom start
+loom stop
 ```
 
 ---
@@ -422,7 +422,7 @@ All `ad` commands exit `1` on failure. With `--json`:
 ```
 
 Common errors:
-- `"Daemon not reachable at http://localhost:7700"` → daemon not running; run `agent-daemon start`
+- `"Daemon not reachable at http://localhost:7700"` → daemon not running; run `loom start`
 - `"No job found matching 'abc'"` → bad prefix; use `ad list` to find the ID
 - `"Ambiguous prefix 'ab' matches 3 jobs"` → use more characters
 
@@ -433,13 +433,13 @@ Common errors:
 **Watch Amazon and notify on price drop:**
 ```bash
 # 1. Admit the connector (one-time, handles browser auth)
-agent-daemon connector admit \
+loom connector admit \
   --name "airpods-pro" --url "https://amazon.com/dp/B09V3KXJPB" \
   --site amazon --prompt "Extract price and availability." \
   --method browser --interval 15m
 
 # 2. Get the connector ID
-CONN_ID=$(agent-daemon connector list --json | jq -r '.[] | select(.name=="airpods-pro") | .id')
+CONN_ID=$(loom connector list --json | jq -r '.[] | select(.name=="airpods-pro") | .id')
 
 # 3. Add a job that fires on price change
 ad add --name "airpods-price-alert" --trigger connector \
@@ -449,14 +449,14 @@ ad add --name "airpods-price-alert" --trigger connector \
 
 **React to GitHub PR comments with AI:**
 ```bash
-agent-daemon connector admit \
+loom connector admit \
   --name "vscode-pr-42" \
   --command "gh api /repos/microsoft/vscode/pulls/42/comments --jq 'last'" \
   --entity "github.pr/microsoft/vscode/42" \
   --prompt "Track the most recent comment: id, body, author." \
   --method command --interval 60s
 
-CONN_ID=$(agent-daemon connector list --json | jq -r '.[] | select(.name=="vscode-pr-42") | .id')
+CONN_ID=$(loom connector list --json | jq -r '.[] | select(.name=="vscode-pr-42") | .id')
 
 ad add --name "pr-comment-responder" --trigger connector \
   --connector-id $CONN_ID --executor claude-code \
@@ -465,14 +465,14 @@ ad add --name "pr-comment-responder" --trigger connector \
 
 **Monitor Teams channel and act on keywords:**
 ```bash
-agent-daemon connector admit \
+loom connector admit \
   --name "teams-devops" \
   --command "node \$CONNECTOR_M365_ROOT/scripts/teams-agent-cli.mjs messages --channel devops --limit 3 --json" \
   --entity "teams.channel/devops" \
   --prompt "Track last message: id, author, content. Flag if content mentions 'incident' or 'down'." \
   --method command --interval 30s
 
-CONN_ID=$(agent-daemon connector list --json | jq -r '.[] | select(.name=="teams-devops") | .id')
+CONN_ID=$(loom connector list --json | jq -r '.[] | select(.name=="teams-devops") | .id')
 
 ad add --name "incident-detector" --trigger connector \
   --connector-id $CONN_ID --executor amplifier \
@@ -488,18 +488,18 @@ echo $MIRROR_CURR_JSON | jq .price
 ENTITY_DATA=$(cat $MIRROR_SNAPSHOT_FILE)
 
 # Query across all watched GitHub PRs
-agent-daemon mirror entities github.pr --json
-agent-daemon mirror get github.pr/owner/repo/42 --json
+loom mirror entities github.pr --json
+loom mirror get github.pr/owner/repo/42 --json
 ```
 
 **Inspect what changed recently:**
 ```bash
-agent-daemon mirror changes --since 1h --json
-agent-daemon mirror changes --entity amazon.product/B09V3KXJPB --limit 5 --json
+loom mirror changes --since 1h --json
+loom mirror changes --entity amazon.product/B09V3KXJPB --limit 5 --json
 ```
 
 **Check connector health:**
 ```bash
-agent-daemon mirror connectors
+loom mirror connectors
 # Shows: name | entity | health | fail-count | last-sync | last-change
 ```

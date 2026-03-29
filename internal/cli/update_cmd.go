@@ -6,13 +6,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ms/agent-daemon/internal/api"
-	"github.com/ms/agent-daemon/internal/updater"
+	"github.com/ms/amplifier-app-loom/internal/api"
+	"github.com/ms/amplifier-app-loom/internal/updater"
 )
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "Update agent-daemon to the latest release",
+	Short: "Update loom to the latest release",
 	Long: `Download the latest release from GitHub, verify its checksum, stop and
 uninstall the current service, atomically swap the binary, reinstall and start
 the service, then exit.

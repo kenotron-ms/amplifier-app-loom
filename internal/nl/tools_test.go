@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 // ── in-memory store ───────────────────────────────────────────────────────────

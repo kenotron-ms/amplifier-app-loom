@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/ms/agent-daemon/internal/mirror"
+	"github.com/ms/amplifier-app-loom/internal/mirror"
 )
 
 func (s *Server) createConnector(w http.ResponseWriter, r *http.Request) {

@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/platform"
-	"github.com/ms/agent-daemon/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/platform"
+	"github.com/ms/amplifier-app-loom/internal/store"
 )
 
 var configCmd = &cobra.Command{
@@ -28,7 +28,7 @@ won't have access to your user environment variables.
 
 For system-level installs, run this with sudo -E to preserve your env vars:
 
-  sudo -E agent-daemon config absorb-env`,
+  sudo -E loom config absorb-env`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dbPath := platform.DBPath()
 		s, err := store.Open(dbPath)

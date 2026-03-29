@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/ms/agent-daemon/web"
+	"github.com/ms/amplifier-app-loom/web"
 )
 
 func staticHandler() http.Handler {

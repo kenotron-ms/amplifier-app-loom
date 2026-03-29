@@ -40,7 +40,7 @@
 - Modify: `internal/service/service.go`
 
 ### Why
-When `agent-daemon install` runs via the `/usr/local/bin/agent-daemon` symlink, `os.Executable()` returns the symlink path. The LaunchAgent plist then records the symlink path as the executable, which has a different TCC identity than the `.app` bundle. Resolving symlinks ensures the plist always points to the real binary inside the `.app`.
+When `loom install` runs via the `/usr/local/bin/loom` symlink, `os.Executable()` returns the symlink path. The LaunchAgent plist then records the symlink path as the executable, which has a different TCC identity than the `.app` bundle. Resolving symlinks ensures the plist always points to the real binary inside the `.app`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -96,7 +96,7 @@ to:
 func BuildServiceConfig(level InstallLevel) *service.Config {
     exePath, _ := os.Executable()
     // Resolve symlinks so the LaunchAgent plist always points to the real binary
-    // inside the .app bundle — this ensures TCC grants to com.ms.agent-daemon apply
+    // inside the .app bundle — this ensures TCC grants to com.ms.loom apply
     // to the daemon process (same TCC identity as the tray).
     if resolved, err := filepath.EvalSymlinks(exePath); err == nil {
         exePath = resolved
@@ -371,7 +371,7 @@ func captureAndSaveUserContext() {
 }
 ```
 
-Add required imports: `"context"`, `"github.com/ms/agent-daemon/internal/config"`, `"github.com/ms/agent-daemon/internal/platform"`, `"github.com/ms/agent-daemon/internal/store"`.
+Add required imports: `"context"`, `"github.com/ms/loom/internal/config"`, `"github.com/ms/loom/internal/platform"`, `"github.com/ms/loom/internal/store"`.
 
 - [ ] **Step 4: Build check**
 
@@ -409,7 +409,7 @@ package onboarding
 import (
     "testing"
 
-    "github.com/ms/agent-daemon/internal/config"
+    "github.com/ms/loom/internal/config"
 )
 
 func TestNeedsOnboarding_NoAPIKey(t *testing.T) {
@@ -465,8 +465,8 @@ package onboarding
 import (
 	"context"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/store"
+	"github.com/ms/loom/internal/config"
+	"github.com/ms/loom/internal/store"
 )
 
 // state holds wizard session data shared between the Go state machine and
@@ -581,7 +581,7 @@ The WKWebView renders this HTML. All CSS and JS must be inline (no external file
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agent Daemon Setup</title>
+<title>Loom Setup</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -767,14 +767,14 @@ The WKWebView renders this HTML. All CSS and JS must be inline (no external file
 <div class="content">
   <div class="step-view active" id="step-1">
     <div class="welcome-icon">🤖</div>
-    <h1>Welcome to Agent Daemon</h1>
+    <h1>Welcome to Loom</h1>
     <p class="subtitle">Your AI-powered job scheduler. Let's get you set up in three quick steps.</p>
   </div>
 
   <!-- Step 2: API Keys -->
   <div class="step-view" id="step-2">
     <div class="section-title">Connect your AI</div>
-    <p class="section-sub">Agent Daemon needs an API key to run AI-powered jobs. Add at least one.</p>
+    <p class="section-sub">Loom needs an API key to run AI-powered jobs. Add at least one.</p>
 
     <div class="field-wrap">
       <div class="field-label">Anthropic API Key</div>
@@ -921,7 +921,7 @@ The WKWebView renders this HTML. All CSS and JS must be inline (no external file
   window.addEventListener("installError", function(e) {
     var msg = e.detail && e.detail.msg ? e.detail.msg : "An error occurred during install.";
     var el = document.getElementById("err-msg");
-    el.textContent = "⚠ " + msg + " — you can try again or run `agent-daemon install` in the terminal.";
+    el.textContent = "⚠ " + msg + " — you can try again or run `loom install` in the terminal.";
     el.classList.add("show");
     var btn = document.getElementById("btn-next");
     btn.disabled = false;
@@ -1047,7 +1047,7 @@ void wizard_show(const char *htmlCStr) {
             styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable)
             backing:NSBackingStoreBuffered
             defer:NO];
-        [_gPanel setTitle:@"Agent Daemon Setup"];
+        [_gPanel setTitle:@"Loom Setup"];
         [_gPanel setHidesOnDeactivate:NO];
         [_gPanel setLevel:NSFloatingWindowLevel];
         _gPanel.delegate = _gDelegate;
@@ -1265,10 +1265,10 @@ import (
 	"unsafe"
 
 	"github.com/kardianos/service"
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/platform"
-	internalsvc "github.com/ms/agent-daemon/internal/service"
-	"github.com/ms/agent-daemon/internal/store"
+	"github.com/ms/loom/internal/config"
+	"github.com/ms/loom/internal/platform"
+	internalsvc "github.com/ms/loom/internal/service"
+	"github.com/ms/loom/internal/store"
 )
 
 // wizardGoMessage is called from ObjC when JS posts a message via
@@ -1431,10 +1431,10 @@ The tray is the entry point for the `.app` bundle. It needs to:
 
 Add to the import block:
 ```go
-"github.com/ms/agent-daemon/internal/onboarding"
+"github.com/ms/loom/internal/onboarding"
 ```
-(also ensure `"context"`, `"github.com/ms/agent-daemon/internal/platform"`,
-`"github.com/ms/agent-daemon/internal/store"` are present — some are already there from Task 3).
+(also ensure `"context"`, `"github.com/ms/loom/internal/platform"`,
+`"github.com/ms/loom/internal/store"` are present — some are already there from Task 3).
 
 - [ ] **Step 2: Add health state type near top of file**
 
@@ -1564,7 +1564,7 @@ Add a goroutine that drives badge state. Add it in the `go func()` section near 
                 // Amber icon: append a warning indicator.
                 // systray doesn't support badges natively; we reflect
                 // the warning in the tooltip and menu instead.
-                systray.SetTooltip("agent-daemon ⚠ action required")
+                systray.SetTooltip("loom ⚠ action required")
                 mActionRequired.Show()
                 mFixAPIKey.Hide(); mFixFDA.Hide(); mFixService.Hide()
                 for _, iss := range issues {

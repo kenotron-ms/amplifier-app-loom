@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	"github.com/ms/agent-daemon/internal/scheduler"
+	"github.com/ms/amplifier-app-loom/internal/scheduler"
 )
 
 // TestDaemonBroadcasterWiring ensures that the broadcaster is constructed in

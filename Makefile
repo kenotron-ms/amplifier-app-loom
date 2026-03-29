@@ -1,6 +1,6 @@
 BINARY   = agent-daemon
 DIST     = dist
-MODULE   = github.com/ms/agent-daemon
+MODULE   = github.com/ms/amplifier-app-loom
 VERSION  = 0.4.1
 LDFLAGS  = -ldflags "-X $(MODULE)/internal/api.Version=$(VERSION) -s -w"
 

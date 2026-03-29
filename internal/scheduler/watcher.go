@@ -15,7 +15,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 // startWatcher launches a file watcher for a watch-triggered job and calls dispatch

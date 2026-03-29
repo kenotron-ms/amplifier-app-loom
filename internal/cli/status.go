@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 var statusCmd = &cobra.Command{
@@ -21,7 +21,7 @@ var statusCmd = &cobra.Command{
 
 		resp, err := http.Get(url)
 		if err != nil {
-			fmt.Println("● agent-daemon: offline")
+			fmt.Println("● loom: offline")
 			return nil
 		}
 		defer resp.Body.Close()
@@ -36,7 +36,7 @@ var statusCmd = &cobra.Command{
 			stateIcon = "⏸"
 		}
 
-		fmt.Printf("%s agent-daemon  [%s]  v%s\n", stateIcon, s.State, s.Version)
+		fmt.Printf("%s loom  [%s]  v%s\n", stateIcon, s.State, s.Version)
 		fmt.Printf("  PID:        %d\n", s.PID)
 		fmt.Printf("  Uptime:     %s\n", formatDuration(time.Since(s.StartedAt)))
 		fmt.Printf("  Jobs:       %d\n", s.JobCount)

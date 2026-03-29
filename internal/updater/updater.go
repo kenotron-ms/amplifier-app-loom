@@ -19,10 +19,10 @@ import (
 
 	kservice "github.com/kardianos/service"
 
-	internalsvc "github.com/ms/agent-daemon/internal/service"
+	internalsvc "github.com/ms/amplifier-app-loom/internal/service"
 )
 
-const githubRepo = "kenotron-ms/agent-daemon"
+const githubRepo = "kenotron-ms/amplifier-app-loom"
 
 // State represents the current update lifecycle state.
 type State string
@@ -376,7 +376,7 @@ func latestRelease(ctx context.Context) (version, downloadURL, checksumURL strin
 
 	version = strings.TrimPrefix(rel.TagName, "v")
 
-	wantBinary := fmt.Sprintf("agent-daemon-%s-%s", runtime.GOOS, runtime.GOARCH)
+	wantBinary := fmt.Sprintf("loom-%s-%s", runtime.GOOS, runtime.GOARCH)
 	if runtime.GOOS == "windows" {
 		wantBinary += ".exe"
 	}
@@ -458,8 +458,8 @@ func fetchExpectedChecksum(ctx context.Context, checksumURL string) (string, err
 		return "", err
 	}
 
-	// Format: "<sha256>  agent-daemon-<os>-<arch>[.exe]"
-	wantFilename := fmt.Sprintf("agent-daemon-%s-%s", runtime.GOOS, runtime.GOARCH)
+	// Format: "<sha256>  loom-<os>-<arch>[.exe]"
+	wantFilename := fmt.Sprintf("loom-%s-%s", runtime.GOOS, runtime.GOARCH)
 	if runtime.GOOS == "windows" {
 		wantFilename += ".exe"
 	}

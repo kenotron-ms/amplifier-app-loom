@@ -3,7 +3,7 @@ package onboarding
 import (
 	"testing"
 
-	"github.com/ms/agent-daemon/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/config"
 )
 
 // ── DetectNeededSteps: API key logic ──────────────────────────────────────────

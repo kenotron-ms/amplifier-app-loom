@@ -1,8 +1,7 @@
----
 bundle:
-  name: loom
+  name: loom-behavior
   version: 1.0.0
-  description: Loom job scheduler — schedule and manage shell, claude-code, and amplifier jobs via a local daemon at localhost:7700
+  description: Loom skills and context — job scheduler control via CLI and HTTP API
 
 tools:
   - module: tool-skills
@@ -13,7 +12,4 @@ tools:
 
 context:
   include:
-    - loom:.amplifier/context/loom-awareness.md
----
-
-# Loom Bundle
+    - loom:context/loom-awareness.md

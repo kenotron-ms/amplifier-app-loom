@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/mirror"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/mirror"
 )
 
 // connectorAdmitCmd implements the admission flow for new connectors.
@@ -32,21 +32,21 @@ extract the data you care about.
 
 Examples:
   # Monitor an Amazon product — opens browser for auth
-  agent-daemon connector admit --name "AirPods Pro" \
+  loom connector admit --name "AirPods Pro" \
     --url "https://amazon.com/dp/B09V3KXJPB" \
     --site amazon --method browser \
     --prompt "Extract current price, availability, and any active deals" \
     --entity "amazon.product/B09V3KXJPB"
 
   # Monitor a GitHub PR via CLI — no browser needed
-  agent-daemon connector admit --name "PR #42" \
+  loom connector admit --name "PR #42" \
     --url "https://github.com/owner/repo/pull/42" \
     --method command \
     --command "gh api /repos/owner/repo/pulls/42" \
     --entity "github.pr/owner/repo/42"
 
   # Monitor a Teams channel — auto-detect method
-  agent-daemon connector admit --name "Engineering General" \
+  loom connector admit --name "Engineering General" \
     --url "https://teams.microsoft.com/..." \
     --site teams --method browser \
     --prompt "Extract the 10 most recent messages with author and timestamp" \
@@ -138,8 +138,8 @@ Examples:
 		}
 		fmt.Println()
 		fmt.Println("The connector is now syncing. Check status with:")
-		fmt.Printf("  agent-daemon mirror connectors\n")
-		fmt.Printf("  agent-daemon mirror get %s\n", created.EntityAddress)
+		fmt.Printf("  loom mirror connectors\n")
+		fmt.Printf("  loom mirror get %s\n", created.EntityAddress)
 
 		return nil
 	},
@@ -199,7 +199,7 @@ func runBrowserAuthFlow(site, url string) error {
 // browserProfileDir returns the path for a site's browser profile.
 func browserProfileDir(site string) string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".agent-daemon", "browser-profiles", site)
+	return filepath.Join(home, ".loom", "browser-profiles", site)
 }
 
 // truncate shortens a string with ellipsis if it exceeds maxLen.

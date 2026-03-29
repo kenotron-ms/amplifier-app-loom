@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 var Version = "0.1.0"

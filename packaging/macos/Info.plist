@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.ms.agent-daemon</string>
+    <string>com.ms.amplifier-app-loom</string>
     <key>CFBundleName</key>
-    <string>AgentDaemon</string>
+    <string>Loom</string>
     <key>CFBundleDisplayName</key>
-    <string>Agent Daemon</string>
+    <string>Loom</string>
     <key>CFBundleExecutable</key>
-    <string>agent-daemon</string>
+    <string>loom</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>

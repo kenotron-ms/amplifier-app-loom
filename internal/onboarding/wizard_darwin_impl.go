@@ -86,7 +86,7 @@ void wizard_show(const char *htmlCStr) {
 
         NSMenuItem *appItem = [[NSMenuItem alloc] init];
         [mainMenu addItem:appItem];
-        NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"Agent Daemon"];
+        NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"Loom"];
         [appItem setSubmenu:appMenu];
 
         NSMenuItem *editItem = [[NSMenuItem alloc] init];
@@ -118,7 +118,7 @@ void wizard_show(const char *htmlCStr) {
             styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable)
             backing:NSBackingStoreBuffered
             defer:NO];
-        [_gPanel setTitle:@"Agent Daemon Setup"];
+        [_gPanel setTitle:@"Loom Setup"];
         [_gPanel setHidesOnDeactivate:NO];
         [_gPanel setLevel:NSFloatingWindowLevel];
         _gPanel.delegate = _gDelegate;

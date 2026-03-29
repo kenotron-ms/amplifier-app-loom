@@ -9,8 +9,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 
-	"github.com/ms/agent-daemon/internal/store"
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 // NLClient is the interface for natural language chat clients.
@@ -46,7 +46,7 @@ func buildSystemPrompt() string {
 		osNotes = "Use Linux/Unix conventions: forward slashes, $HOME, ~/.config, systemctl for services, apt/yum/pacman for packages."
 	}
 
-	return `You are the agent-daemon assistant. You help users manage their scheduled jobs.
+	return `You are the loom assistant. You help users manage their scheduled jobs.
 
 ## Runtime environment
 - OS: ` + osName + ` (` + os + `/` + arch + `)

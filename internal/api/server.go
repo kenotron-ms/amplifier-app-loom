@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/mirror"
-	"github.com/ms/agent-daemon/internal/nl"
-	"github.com/ms/agent-daemon/internal/queue"
-	"github.com/ms/agent-daemon/internal/scheduler"
-	"github.com/ms/agent-daemon/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/mirror"
+	"github.com/ms/amplifier-app-loom/internal/nl"
+	"github.com/ms/amplifier-app-loom/internal/queue"
+	"github.com/ms/amplifier-app-loom/internal/scheduler"
+	"github.com/ms/amplifier-app-loom/internal/store"
 )
 
 // Server is the HTTP server for the web UI and REST API.

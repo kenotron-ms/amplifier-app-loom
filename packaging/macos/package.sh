@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # packaging/macos/package.sh
 #
-# Assembles a signed, notarized .app bundle and .dmg for agent-daemon.
+# Assembles a signed, notarized .app bundle and .dmg for loom.
 #
 # Usage:
 #   ./package.sh <binary-path> <arch> <version>
-#   e.g. ./package.sh ../../dist/agent-daemon-darwin-arm64 arm64 0.2.0
+#   e.g. ./package.sh ../../dist/loom-darwin-arm64 arm64 0.2.0
 #
 # Required env vars:
 #   APPLE_CERTIFICATE_P12       base64-encoded .p12 certificate
@@ -30,8 +30,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DIST_DIR="$(cd "$(dirname "$BINARY")" && pwd)"
 APP_NAME="AgentDaemon"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
-DMG_NAME="agent-daemon-darwin-$ARCH.dmg"
-KEYCHAIN_NAME="agent-daemon-build.keychain"
+DMG_NAME="loom-darwin-$ARCH.dmg"
+KEYCHAIN_NAME="loom-build.keychain"
 
 # ── Import certificate into a temporary keychain ──────────────────────────────
 echo "==> Importing certificate..."
@@ -52,8 +52,8 @@ rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
 
-cp "$BINARY" "$APP_DIR/Contents/MacOS/agent-daemon"
-chmod +x "$APP_DIR/Contents/MacOS/agent-daemon"
+cp "$BINARY" "$APP_DIR/Contents/MacOS/loom"
+chmod +x "$APP_DIR/Contents/MacOS/loom"
 
 sed "s/{{VERSION}}/$VERSION/g" "$SCRIPT_DIR/Info.plist" > "$APP_DIR/Contents/Info.plist"
 
@@ -96,7 +96,7 @@ cp -R "$APP_DIR" "$STAGING/"
 ln -s /Applications "$STAGING/Applications"
 
 hdiutil create \
-    -volname "Agent Daemon $VERSION" \
+    -volname "Loom $VERSION" \
     -srcfolder "$STAGING" \
     -ov \
     -format UDZO \

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# agent-daemon installer
-# One-liner: curl -fsSL https://raw.githubusercontent.com/kenotron-ms/agent-daemon/main/.amplifier/scripts/install.sh | bash
+# loom installer
+# One-liner: curl -fsSL https://raw.githubusercontent.com/kenotron-ms/amplifier-app-loom/main/.amplifier/scripts/install.sh | bash
 
 set -euo pipefail
 
-REPO="kenotron-ms/agent-daemon"
-BINARY="agent-daemon"
+REPO="kenotron-ms/amplifier-app-loom"
+BINARY="loom"
 APP_NAME="AgentDaemon"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -61,13 +61,13 @@ if [ "$OS" = "darwin" ] && [ -d "/Applications/${APP_NAME}.app" ]; then
   CURRENT="$("${APP_NAME}.app/Contents/MacOS/${BINARY}" version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
   CURRENT="${CURRENT:-unknown}"
   info "${APP_NAME}.app ${CURRENT} already installed in /Applications"
-  info "Run 'agent-daemon update' to upgrade to $VERSION."
+  info "Run 'loom update' to upgrade to $VERSION."
   SKIP_DOWNLOAD=true
 elif [ "$OS" = "linux" ] && command -v "$BINARY" &>/dev/null; then
-  CURRENT="$(agent-daemon version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+  CURRENT="$(loom version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
   CURRENT="${CURRENT:-unknown}"
-  info "agent-daemon ${CURRENT} already installed at $(command -v $BINARY)"
-  info "Run 'agent-daemon update' to upgrade to $VERSION."
+  info "loom ${CURRENT} already installed at $(command -v $BINARY)"
+  info "Run 'loom update' to upgrade to $VERSION."
   SKIP_DOWNLOAD=true
 fi
 
@@ -75,7 +75,7 @@ fi
 
 if [ "$SKIP_DOWNLOAD" = false ]; then
   echo ""
-  echo "Installing agent-daemon $VERSION..."
+  echo "Installing loom $VERSION..."
   echo ""
   info "Platform: ${OS}/${ARCH}"
 
@@ -124,7 +124,7 @@ if [ "$OS" = "darwin" ]; then
   APP_BINARY="/Applications/${APP_NAME}.app/Contents/MacOS/${BINARY}"
   if [ ! -e "${BIN_DIR}/${BINARY}" ]; then
     ln -sf "$APP_BINARY" "${BIN_DIR}/${BINARY}"
-    success "Symlinked agent-daemon → $BIN_DIR"
+    success "Symlinked loom → $BIN_DIR"
   fi
 fi
 
@@ -158,12 +158,12 @@ if command -v amplifier &>/dev/null; then
   echo ""
   echo "Registering Amplifier app bundle..."
   echo ""
-  amplifier bundle add "git+https://github.com/kenotron-ms/agent-daemon@main" --app \
+  amplifier bundle add "git+https://github.com/kenotron-ms/amplifier-app-loom@main" --app \
     && success "Amplifier app bundle registered (active in every session)" \
-    || warn "Could not register Amplifier bundle — run manually: amplifier bundle add git+https://github.com/kenotron-ms/agent-daemon@main --app"
+    || warn "Could not register Amplifier bundle — run manually: amplifier bundle add git+https://github.com/kenotron-ms/amplifier-app-loom@main --app"
 else
   warn "Amplifier not found — skipping bundle registration."
-  warn "Once installed, run: amplifier bundle add git+https://github.com/kenotron-ms/agent-daemon@main --app"
+  warn "Once installed, run: amplifier bundle add git+https://github.com/kenotron-ms/amplifier-app-loom@main --app"
 fi
 
 # ── Done ───────────────────────────────────────────────────────────────────────
@@ -171,9 +171,9 @@ fi
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-success "agent-daemon $VERSION is installed and running!"
+success "loom $VERSION is installed and running!"
 echo ""
-echo "  Status:  agent-daemon status"
+echo "  Status:  loom status"
 echo "  Web UI:  http://localhost:7700"
 if [ "$OS" = "darwin" ]; then
 echo "  Tray:    Look for the AgentDaemon icon in your menu bar"

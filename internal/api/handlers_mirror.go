@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ms/agent-daemon/internal/mirror"
+	"github.com/ms/amplifier-app-loom/internal/mirror"
 )
 
 // requireMirror is a guard — returns true if mirrorStore is available, else writes an error.

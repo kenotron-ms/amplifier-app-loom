@@ -11,18 +11,18 @@ import (
 func DataDir() string {
 	if runtime.GOOS == "darwin" {
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Application Support", "agent-daemon")
+		return filepath.Join(home, "Library", "Application Support", "loom")
 	}
 	// Linux: XDG_DATA_HOME or ~/.local/share
 	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
-		return filepath.Join(xdg, "agent-daemon")
+		return filepath.Join(xdg, "loom")
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".local", "share", "agent-daemon")
+	return filepath.Join(home, ".local", "share", "loom")
 }
 
 func DBPath() string {
-	return filepath.Join(DataDir(), "agent-daemon.db")
+	return filepath.Join(DataDir(), "loom.db")
 }
 
 func ConfigPath() string {
@@ -30,9 +30,9 @@ func ConfigPath() string {
 }
 
 func LogPath() string {
-	return filepath.Join(DataDir(), "agent-daemon.log")
+	return filepath.Join(DataDir(), "loom.log")
 }
 
 func PIDPath() string {
-	return filepath.Join(DataDir(), "agent-daemon.pid")
+	return filepath.Join(DataDir(), "loom.pid")
 }

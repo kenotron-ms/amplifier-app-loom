@@ -17,7 +17,7 @@ them to a working installation. Three silent failure modes exist:
    `HomeDir` and `Shell` are never persisted; all jobs break under launchd
 
 Additionally, the `BuildServiceConfig` function uses `os.Executable()` verbatim. When a user
-runs `agent-daemon install` via the `/usr/local/bin` symlink, the LaunchAgent plist records
+runs `loom install` via the `/usr/local/bin` symlink, the LaunchAgent plist records
 the symlink path rather than the resolved `.app` binary path. This gives the daemon a
 different TCC identity than the tray, so any TCC grants to the bundle may not apply.
 
@@ -36,7 +36,7 @@ different TCC identity than the tray, so any TCC grants to the bundle may not ap
 
 - Linux and Windows (existing CLI install flow is unchanged)
 - Adding App Sandbox (the app intentionally stays unsandboxed)
-- Changing the CLI `agent-daemon install` path (still works as before)
+- Changing the CLI `loom install` path (still works as before)
 - Full Disk Access for the tray `.app` itself (only the background service needs it)
 
 ---
@@ -90,7 +90,7 @@ A simple entry screen that sets context before asking for anything.
 
 **Contents:**
 - App icon (centered, large)
-- Heading: "Welcome to Agent Daemon"
+- Heading: "Welcome to Loom"
 - Body: "Your AI-powered job scheduler. Let's get you set up in three quick steps."
 - Step progress indicator: `[1 Welcome] [2 API Keys] [3 Permissions]` — step 1 active
 - Single CTA: "Get Started →" (blue, bottom right)
@@ -106,7 +106,7 @@ Collects the credentials the daemon needs to run AI-powered jobs.
 
 **Contents:**
 - Heading: "Connect your AI"
-- Subtitle: "Agent Daemon needs an API key to run AI-powered jobs. Add at least one."
+- Subtitle: "Loom needs an API key to run AI-powered jobs. Add at least one."
 - **Anthropic API Key** field (required)
   - Placeholder: `sk-ant-...`
   - Inline validation: green checkmark when non-empty; red border + "Required" if Next is
@@ -168,7 +168,7 @@ gated on the FDA prompt interaction, only on reaching the Done action.
 
 **On Done — error handling:** if `installService` fails (e.g., plist write error), show an
 inline error message in the wizard ("Service install failed — try again or run
-`agent-daemon install` from the terminal") and keep the Done button enabled for retry.
+`loom install` from the terminal") and keep the Done button enabled for retry.
 Do not close the wizard on install failure.
 
 **On Done (from either initial state) — success path:**
@@ -208,7 +208,7 @@ user will see in System Settings and what to click.
 - Realistic macOS System Settings window (Privacy & Security → Full Disk Access pane)
 - "AgentDaemon" entry visible in the Full Disk Access list (toggle OFF)
 - Two callout annotations:
-  1. Red circle "1" with arrow → "Find Agent Daemon in this list"
+  1. Red circle "1" with arrow → "Find Loom in this list"
   2. Red circle "2" with arrow → toggle switch → "Toggle this ON"
 
 **Delivery:** PNG asset committed to `internal/onboarding/fda-guide.png` (source:
@@ -315,8 +315,8 @@ Add `filepath.EvalSymlinks` before the path is written to the plist:
 func BuildServiceConfig(level InstallLevel) *service.Config {
     exePath, _ := os.Executable()
     // Resolve symlinks so the LaunchAgent plist always points to the real
-    // binary inside the .app bundle, not /usr/local/bin/agent-daemon.
-    // This ensures the daemon shares the .app's TCC identity (com.ms.agent-daemon).
+    // binary inside the .app bundle, not /usr/local/bin/loom.
+    // This ensures the daemon shares the .app's TCC identity (com.ms.loom).
     if resolved, err := filepath.EvalSymlinks(exePath); err == nil {
         exePath = resolved
     }
@@ -326,9 +326,9 @@ func BuildServiceConfig(level InstallLevel) *service.Config {
     }
 ```
 
-**Why it matters:** if the user runs `agent-daemon install` via the `/usr/local/bin` symlink
+**Why it matters:** if the user runs `loom install` via the `/usr/local/bin` symlink
 before ever opening the `.app`, the LaunchAgent would record the symlink path as the
-executable. That path has no bundle identity, so TCC grants to `com.ms.agent-daemon` would
+executable. That path has no bundle identity, so TCC grants to `com.ms.loom` would
 not apply to the daemon process.
 
 ---
@@ -362,7 +362,7 @@ Step 3 "Done" flow.
 | `internal/config/config.go` | Modify | (1) Add `OnboardingComplete bool` to `Config` struct; (2) move `captureUserContext` here as exported `CaptureUserContext()` — currently unexported in `internal/cli/service_cmds.go` |
 | `internal/cli/service_cmds.go` | Modify | Remove `captureUserContext`; call `config.CaptureUserContext()` instead |
 | `internal/service/service.go` | Modify | Add `filepath.EvalSymlinks` to `BuildServiceConfig` |
-| `internal/tray/tray.go` | Modify | Call `config.CaptureUserContext()` after install; add 30s health-check goroutine; amber badge when unhealthy; "Fix →" menu item; call `onboarding.Show()` on first launch if conditions not met. LaunchAgent plist path for health check: `~/Library/LaunchAgents/agent-daemon.plist` (matches `isServiceInstalled()` existing check). |
+| `internal/tray/tray.go` | Modify | Call `config.CaptureUserContext()` after install; add 30s health-check goroutine; amber badge when unhealthy; "Fix →" menu item; call `onboarding.Show()` on first launch if conditions not met. LaunchAgent plist path for health check: `~/Library/LaunchAgents/loom.plist` (matches `isServiceInstalled()` existing check). |
 
 ---
 
@@ -419,5 +419,5 @@ single-step "Fix" dialog.
 
 2. **FDA for the tray `.app` itself vs. the daemon binary** — FDA granted in System Settings
    will appear under the daemon binary path. Since the tray and daemon are the same binary
-   (both at `.app/Contents/MacOS/agent-daemon`), the grant covers both. Confirmed via the
+   (both at `.app/Contents/MacOS/loom`), the grant covers both. Confirmed via the
    `BuildServiceConfig` + `EvalSymlinks` fix.

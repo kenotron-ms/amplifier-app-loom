@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/mirror"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/mirror"
 )
 
 // mirrorCmd is the parent command for mirror subcommands.
@@ -30,9 +30,9 @@ var mirrorEntitiesCmd = &cobra.Command{
 	Long: `List all entities in the mirror, optionally filtered by kind prefix.
 
 Examples:
-  agent-daemon mirror entities                     # list all
-  agent-daemon mirror entities github.pr/          # list all GitHub PRs
-  agent-daemon mirror entities amazon.product/     # list all Amazon products`,
+  loom mirror entities                     # list all
+  loom mirror entities github.pr/          # list all GitHub PRs
+  loom mirror entities amazon.product/     # list all Amazon products`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port, _ := cmd.Flags().GetInt("port")
@@ -79,8 +79,8 @@ var mirrorGetCmd = &cobra.Command{
 	Long: `Retrieve the full JSON snapshot of a mirrored entity.
 
 Examples:
-  agent-daemon mirror get github.pr/owner/repo/42
-  agent-daemon mirror get amazon.product/B09V3KXJPB`,
+  loom mirror get github.pr/owner/repo/42
+  loom mirror get amazon.product/B09V3KXJPB`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port, _ := cmd.Flags().GetInt("port")
@@ -121,9 +121,9 @@ var mirrorChangesCmd = &cobra.Command{
 	Long: `List recent change records, optionally filtered by entity address.
 
 Examples:
-  agent-daemon mirror changes                              # all recent changes
-  agent-daemon mirror changes github.pr/owner/repo/42     # changes for one entity
-  agent-daemon mirror changes --limit 10                   # last 10 changes`,
+  loom mirror changes                              # all recent changes
+  loom mirror changes github.pr/owner/repo/42     # changes for one entity
+  loom mirror changes --limit 10                   # last 10 changes`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port, _ := cmd.Flags().GetInt("port")

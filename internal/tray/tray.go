@@ -17,13 +17,13 @@ import (
 	"fyne.io/systray"
 	"github.com/kardianos/service"
 
-	"github.com/ms/agent-daemon/internal/api"
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/onboarding"
-	"github.com/ms/agent-daemon/internal/platform"
-	internalsvc "github.com/ms/agent-daemon/internal/service"
-	"github.com/ms/agent-daemon/internal/store"
-	"github.com/ms/agent-daemon/internal/updater"
+	"github.com/ms/amplifier-app-loom/internal/api"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/onboarding"
+	"github.com/ms/amplifier-app-loom/internal/platform"
+	internalsvc "github.com/ms/amplifier-app-loom/internal/service"
+	"github.com/ms/amplifier-app-loom/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/updater"
 )
 
 type healthIssue struct {
@@ -54,8 +54,8 @@ func isDaemonRunning(port int) bool {
 func isCLIInPath() bool {
 	home, _ := os.UserHomeDir()
 	for _, p := range []string{
-		"/usr/local/bin/agent-daemon",
-		filepath.Join(home, ".local", "bin", "agent-daemon"),
+		"/usr/local/bin/loom",
+		filepath.Join(home, ".local", "bin", "loom"),
 	} {
 		if _, err := os.Stat(p); err == nil {
 			return true
@@ -73,7 +73,7 @@ func isAmplifierConnected() bool {
 	if err != nil {
 		return true // can't check — don't surface a spurious warning
 	}
-	return strings.Contains(string(out), "agent-daemon")
+	return strings.Contains(string(out), "loom")
 }
 
 func checkHealth(port int) []healthIssue {
@@ -140,13 +140,13 @@ func onReady(port int) {
 	// Step 1: tray icon appears immediately.
 	icon := makeIcon()
 	systray.SetTemplateIcon(icon, icon)
-	systray.SetTooltip("agent-daemon")
+	systray.SetTooltip("loom")
 
 	// Step 3: show setup prompts for anything not yet configured.
 	// Service prompt: only if plist missing AND daemon not already running.
 	var mSetup *systray.MenuItem
 	if !isServiceInstalled() && !isDaemonRunning(port) {
-		mSetup = systray.AddMenuItem("⚙  Set up background service…", "Install agent-daemon so it starts automatically")
+		mSetup = systray.AddMenuItem("⚙  Set up background service…", "Install loom so it starts automatically")
 		systray.AddSeparator()
 	}
 
@@ -163,7 +163,7 @@ func onReady(port int) {
 	mFixAPIKey := mActionRequired.AddSubMenuItem("Anthropic API key missing   Fix →", "Open settings to add API key")
 	mFixFDA := mActionRequired.AddSubMenuItem("Full Disk Access missing     Fix →", "Open System Settings")
 	mFixService := mActionRequired.AddSubMenuItem("Service not installed         Fix →", "Install background service")
-	mFixCLI := mActionRequired.AddSubMenuItem("CLI not in terminal PATH     Fix →", "Add agent-daemon to PATH")
+	mFixCLI := mActionRequired.AddSubMenuItem("CLI not in terminal PATH     Fix →", "Add loom to PATH")
 	mFixAmplifier := mActionRequired.AddSubMenuItem("Amplifier not connected      Fix →", "Register Amplifier bundle")
 	mFixAPIKey.Hide()
 	mFixFDA.Hide()
@@ -268,10 +268,10 @@ func onReady(port int) {
 		for {
 			issues := checkHealth(port)
 			if len(issues) == 0 {
-				systray.SetTooltip("agent-daemon")
+				systray.SetTooltip("loom")
 				mActionRequired.Hide()
 			} else {
-				systray.SetTooltip("agent-daemon ⚠ action required")
+				systray.SetTooltip("loom ⚠ action required")
 				mFixAPIKey.Hide()
 				mFixFDA.Hide()
 				mFixService.Hide()
@@ -395,10 +395,10 @@ func onReady(port int) {
 // isServiceInstalled returns true if a LaunchAgent or LaunchDaemon plist exists.
 func isServiceInstalled() bool {
 	home, _ := os.UserHomeDir()
-	if _, err := os.Stat(filepath.Join(home, "Library", "LaunchAgents", "agent-daemon.plist")); err == nil {
+	if _, err := os.Stat(filepath.Join(home, "Library", "LaunchAgents", "loom.plist")); err == nil {
 		return true
 	}
-	if _, err := os.Stat("/Library/LaunchDaemons/agent-daemon.plist"); err == nil {
+	if _, err := os.Stat("/Library/LaunchDaemons/loom.plist"); err == nil {
 		return true
 	}
 	return false
@@ -449,10 +449,10 @@ func runServiceInstallDialog() bool {
 // Returns the chosen level and true, or false if cancelled.
 func showInstallDialog() (internalsvc.InstallLevel, bool) {
 	script := `tell application "System Events"
-	set choice to display dialog "Choose how Agent Daemon should run in the background:" ¬
+	set choice to display dialog "Choose how Loom should run in the background:" ¬
 		buttons {"Cancel", "System (all users, starts at boot)", "Just for me (login item)"} ¬
 		default button "Just for me (login item)" ¬
-		with title "Agent Daemon Setup" ¬
+		with title "Loom Setup" ¬
 		with icon caution
 	return button returned of choice
 end tell`
@@ -468,7 +468,7 @@ end tell`
 }
 
 // installCLIIfNeeded symlinks the binary to /usr/local/bin when running from
-// a .app bundle for the first time so `agent-daemon` works in the terminal.
+// a .app bundle for the first time so `loom` works in the terminal.
 func installCLIIfNeeded() {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -479,7 +479,7 @@ func installCLIIfNeeded() {
 	}
 
 	home, _ := os.UserHomeDir()
-	target := "/usr/local/bin/agent-daemon"
+	target := "/usr/local/bin/loom"
 
 	if _, err := os.Lstat(target); err == nil {
 		return // already there
@@ -487,30 +487,30 @@ func installCLIIfNeeded() {
 
 	// Try without privileges first (writable on Homebrew setups).
 	if os.Symlink(exePath, target) == nil {
-		slog.Info("installed CLI to /usr/local/bin/agent-daemon")
+		slog.Info("installed CLI to /usr/local/bin/loom")
 		return
 	}
 
 	// Ask for admin via macOS password dialog.
 	script := fmt.Sprintf(
-		`do shell script "ln -sf %q /usr/local/bin/agent-daemon" with administrator privileges`,
+		`do shell script "ln -sf %q /usr/local/bin/loom" with administrator privileges`,
 		exePath,
 	)
 	if exec.Command("osascript", "-e", script).Run() == nil {
-		slog.Info("installed CLI to /usr/local/bin/agent-daemon (via admin dialog)")
+		slog.Info("installed CLI to /usr/local/bin/loom (via admin dialog)")
 		return
 	}
 
 	// Fall back to ~/.local/bin silently.
 	localBin := filepath.Join(home, ".local", "bin")
 	_ = os.MkdirAll(localBin, 0755)
-	if os.Symlink(exePath, filepath.Join(localBin, "agent-daemon")) == nil {
-		slog.Info("installed CLI to ~/.local/bin/agent-daemon")
+	if os.Symlink(exePath, filepath.Join(localBin, "loom")) == nil {
+		slog.Info("installed CLI to ~/.local/bin/loom")
 		addToShellProfile(home, localBin)
 	}
 }
 
-// connectAmplifier registers the agent-daemon bundle as an Amplifier app bundle.
+// connectAmplifier registers the loom bundle as an Amplifier app bundle.
 func connectAmplifier() {
 	amplifierPath, err := exec.LookPath("amplifier")
 	if err != nil {
@@ -518,7 +518,7 @@ func connectAmplifier() {
 		return
 	}
 	out, err := exec.Command(amplifierPath, "bundle", "add",
-		"git+https://github.com/kenotron-ms/agent-daemon@main", "--app").CombinedOutput()
+		"git+https://github.com/kenotron-ms/amplifier-app-loom@main", "--app").CombinedOutput()
 	if err != nil {
 		slog.Warn("tray: amplifier bundle add failed", "err", err, "out", string(out))
 		return
@@ -528,7 +528,7 @@ func connectAmplifier() {
 
 // addToShellProfile appends a PATH export to shell rc files if not already present.
 func addToShellProfile(home, dir string) {
-	line := fmt.Sprintf("\nexport PATH=\"%s:$PATH\" # added by AgentDaemon\n", dir)
+	line := fmt.Sprintf("\nexport PATH=\"%s:$PATH\" # added by Loom\n", dir)
 	for _, rc := range []string{".zshrc", ".bashrc", ".bash_profile"} {
 		p := filepath.Join(home, rc)
 		if _, err := os.Stat(p); err != nil {

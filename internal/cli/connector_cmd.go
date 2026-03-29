@@ -10,8 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/mirror"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/mirror"
 )
 
 // connectorCmd is the parent command for connector management.
@@ -78,17 +78,17 @@ var connectorAddCmd = &cobra.Command{
 	Use:   "add",
 	Short: "Add a new connector",
 	Example: `  # Monitor a GitHub PR via CLI
-  agent-daemon connector add --name "PR #42" \
+  loom connector add --name "PR #42" \
     --method command --command "gh api /repos/owner/repo/pulls/42" \
     --entity "github.pr/owner/repo/42" --interval 60s
 
   # Monitor an API endpoint
-  agent-daemon connector add --name "Stock Price" \
+  loom connector add --name "Stock Price" \
     --method http --url "https://api.example.com/price/AAPL" \
     --entity "stock.price/AAPL" --interval 5m
 
   # Monitor a web page via browser
-  agent-daemon connector add --name "Amazon AirPods" \
+  loom connector add --name "Amazon AirPods" \
     --method browser --url "https://amazon.com/dp/B09V3KXJPB" \
     --site amazon --entity "amazon.product/B09V3KXJPB" \
     --prompt "Extract price and availability" --interval 15m`,

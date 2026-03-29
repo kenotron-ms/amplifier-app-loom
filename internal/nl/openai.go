@@ -8,8 +8,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/ms/agent-daemon/internal/store"
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 const openAIEndpoint = "https://api.openai.com/v1/chat/completions"

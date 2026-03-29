@@ -20,8 +20,8 @@ internal/service/daemon.go          — where runner and server are constructed
 ```
 
 Key facts:
-- Module path: `github.com/ms/agent-daemon`
-- Binary entrypoint: `cmd/agent-daemon/main.go`
+- Module path: `github.com/ms/loom`
+- Binary entrypoint: `cmd/loom/main.go`
 - Route registration uses Go 1.22+ pattern: `mux.HandleFunc("GET /api/runs/{id}/stream", s.handler)`
 - Path variable extraction: `r.PathValue("id")`
 - JSON helpers already exist: `writeJSON(w, status, v)` and `writeError(w, status, "static string")`
@@ -213,7 +213,7 @@ func TestBroadcaster_MultipleSubscribers(t *testing.T) {
 ### Step 2: Run the test to verify it fails
 
 ```bash
-cd /Users/ken/workspace/ms/agent-daemon
+cd /Users/ken/workspace/ms/loom
 go test ./internal/scheduler/... -v -run TestBroadcaster 2>&1 | head -30
 ```
 
@@ -424,7 +424,7 @@ Expected output:
 === RUN   TestBroadcaster_MultipleSubscribers
 --- PASS: TestBroadcaster_MultipleSubscribers (0.00s)
 PASS
-ok  	github.com/ms/agent-daemon/internal/scheduler
+ok  	github.com/ms/loom/internal/scheduler
 ```
 
 All 7 tests must pass. If any fail, fix broadcaster.go before continuing.
@@ -458,8 +458,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ms/agent-daemon/internal/store"
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/loom/internal/store"
+	"github.com/ms/loom/internal/types"
 )
 
 // TestRunnerWiresBroadcaster verifies that after Execute completes:
@@ -698,7 +698,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/loom/internal/types"
 )
 
 func TestExecShell_StreamsChunksToBroadcaster(t *testing.T) {
@@ -809,7 +809,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/loom/internal/types"
 )
 
 func execShell(ctx context.Context, job *types.Job, b *Broadcaster, runID string) (output string, exitCode int, err error) {
@@ -956,9 +956,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ms/agent-daemon/internal/scheduler"
-	"github.com/ms/agent-daemon/internal/store"
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/loom/internal/scheduler"
+	"github.com/ms/loom/internal/store"
+	"github.com/ms/loom/internal/types"
 )
 
 // newTestServer builds a minimal Server with a real bolt store and broadcaster.
@@ -1175,7 +1175,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/loom/internal/types"
 )
 
 // ── sseRunDone ────────────────────────────────────────────────────────────────
@@ -1527,7 +1527,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/loom/internal/types"
 )
 
 // TestExecClaudeCode_MissingConfig verifies early validation.
@@ -1579,7 +1579,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/loom/internal/types"
 )
 
 func execClaudeCode(ctx context.Context, job *types.Job, b *Broadcaster, runID string) (output string, exitCode int, err error) {
@@ -1701,7 +1701,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/loom/internal/types"
 )
 
 func TestExecAmplifier_MissingConfig(t *testing.T) {
@@ -1768,7 +1768,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/loom/internal/types"
 )
 
 func execAmplifier(ctx context.Context, job *types.Job, b *Broadcaster, runID string) (output string, exitCode int, err error) {
@@ -1948,7 +1948,7 @@ Create `scripts/test-sse.sh` with this exact content:
 #
 # Usage:
 #   # Terminal 1 — start the daemon however you normally do:
-#   ./agent-daemon serve
+#   ./loom serve
 #
 #   # Terminal 2 — run this script:
 #   PORT=61017 bash scripts/test-sse.sh
@@ -2136,10 +2136,10 @@ chmod +x scripts/test-sse.sh
 ### Step 2: Build the binary
 
 ```bash
-go build -o ./agent-daemon-test ./cmd/agent-daemon
+go build -o ./loom-test ./cmd/loom
 ```
 
-Expected: binary built with zero errors at `./agent-daemon-test`.
+Expected: binary built with zero errors at `./loom-test`.
 
 ### Step 3: Run the integration test
 
@@ -2147,7 +2147,7 @@ Start the daemon (use the test binary or your normal dev binary — both work):
 
 ```bash
 # Terminal 1: start the daemon
-./agent-daemon-test serve
+./loom-test serve
 ```
 
 Then in a second terminal (or a new bash block):
@@ -2157,7 +2157,7 @@ Then in a second terminal (or a new bash block):
 PORT=61017 bash scripts/test-sse.sh
 ```
 
-> **If the daemon uses a different port:** check `~/.config/agent-daemon/config.json` or your config file and set `PORT=<that-port>`.
+> **If the daemon uses a different port:** check `~/.config/loom/config.json` or your config file and set `PORT=<that-port>`.
 
 Expected output:
 ```
@@ -2208,7 +2208,7 @@ All 10 checks must pass. If any fail:
 ### Step 4: Clean up the test binary
 
 ```bash
-rm ./agent-daemon-test
+rm ./loom-test
 ```
 
 ### Step 5: Commit everything

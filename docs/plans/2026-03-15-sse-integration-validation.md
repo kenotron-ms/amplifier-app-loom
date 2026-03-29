@@ -33,7 +33,7 @@ tasks for a human reviewer to confirm correctness.
 - Commit `da96a10` — `fix: add --no-buffer flag to SSE curl command in test script`
 - Git tag `phase1-backend-complete` on `da96a10` (HEAD)
 - All unit tests passing (`go test ./internal/...`)
-- Binary builds cleanly (`go build -o ./agent-daemon-test ./cmd/agent-daemon`)
+- Binary builds cleanly (`go build -o ./loom-test ./cmd/loom`)
 
 ---
 
@@ -99,19 +99,19 @@ The spec requires exactly: `curl -sf -N --no-buffer --max-time 15 GET /api/runs/
 ### Task 4: Verify Binary Builds With Zero Errors
 
 **Files:**
-- Build: `cmd/agent-daemon/` (source)
-- Artifact: `./agent-daemon-test` (temporary, cleaned up)
+- Build: `cmd/loom/` (source)
+- Artifact: `./loom-test` (temporary, cleaned up)
 
 **Step 1: Build the binary**
-Run: `go build -o ./agent-daemon-test ./cmd/agent-daemon`
+Run: `go build -o ./loom-test ./cmd/loom`
 Expected: Exit code 0, no output (clean build)
 
 **Step 2: Verify binary was created**
-Run: `file ./agent-daemon-test`
+Run: `file ./loom-test`
 Expected: Mach-O 64-bit executable (or appropriate platform binary)
 
 **Step 3: Clean up test binary**
-Run: `rm -f ./agent-daemon-test`
+Run: `rm -f ./loom-test`
 Expected: Binary removed, not committed to repo
 
 ---
@@ -131,28 +131,28 @@ Expected: All packages report `ok` or `[no test files]`. Zero `FAIL` lines.
 
 **Files:**
 - Run: `scripts/test-sse.sh`
-- Binary: `agent-daemon-sse` (SSE-capable build)
+- Binary: `loom-sse` (SSE-capable build)
 
 **Step 1: Configure daemon port to 61017 and start SSE daemon**
 
-The `agent-daemon-sse` binary reads its port from the BoltDB config store
-(`~/Library/Application Support/agent-daemon/agent-daemon.db`). To run on
+The `loom-sse` binary reads its port from the BoltDB config store
+(`~/Library/Application Support/loom/loom.db`). To run on
 port 61017 (as the acceptance criterion requires), the config must be updated
 before starting the daemon. With the daemon stopped:
 
 ```bash
 # Update BoltDB config port to 61017 (using setport utility against the store)
 # Then start the SSE-capable daemon
-./agent-daemon-sse _serve &
+./loom-sse _serve &
 SSE_PID=$!
 sleep 3
 ```
-Expected log line: `INFO agent-daemon started port=61017 db=".../agent-daemon.db"`
+Expected log line: `INFO loom started port=61017 db=".../loom.db"`
 
 **Step 2: Run the integration test script**
 Run: `PORT=61017 bash scripts/test-sse.sh`
 
-**Actual output (2026-03-15 21:52 PDT — `PORT=61017 bash scripts/test-sse.sh` against `agent-daemon-sse` PID 56868 confirmed running on port 61017 via `lsof -i :61017`):**
+**Actual output (2026-03-15 21:52 PDT — `PORT=61017 bash scripts/test-sse.sh` against `loom-sse` PID 56868 confirmed running on port 61017 via `lsof -i :61017`):**
 ```
 Check 1: Daemon health check
   ✓ Daemon is healthy at http://localhost:61017
@@ -181,10 +181,10 @@ RESULTS: 10 passed, 0 failed
 ```
 Exit code: 0 ✅
 
-**Reproducibility note:** The `agent-daemon-sse` binary (PID 56868) was confirmed live on port 61017 via `lsof -i :61017` before running the test. The daemon was not temporarily started — it is the persistent active service on port 61017. The integration test is fully reproducible in the current committed state.
+**Reproducibility note:** The `loom-sse` binary (PID 56868) was confirmed live on port 61017 via `lsof -i :61017` before running the test. The daemon was not temporarily started — it is the persistent active service on port 61017. The integration test is fully reproducible in the current committed state.
 
 **Step 3: Daemon remains running — no restore needed**
-The SSE-capable daemon (`agent-daemon-sse`) is the active service on port 61017. No old binary was restored after the test run. `./agent-daemon-sse _serve` is the process that owns port 61017 (PID 56868).
+The SSE-capable daemon (`loom-sse`) is the active service on port 61017. No old binary was restored after the test run. `./loom-sse _serve` is the process that owns port 61017 (PID 56868).
 
 ---
 
@@ -220,7 +220,7 @@ The original commit message matches the spec: `test: add SSE integration validat
 
 **Scenario B: Copy button produces clean raw text**
 
-Browser-verified 2026-03-15 22:05 PDT against `agent-daemon-sse` running on port 61017.
+Browser-verified 2026-03-15 22:05 PDT against `loom-sse` running on port 61017.
 
 **Steps performed:**
 1. Navigated to `http://localhost:61017`
@@ -252,7 +252,7 @@ Clipboard content captured (JSON-serialized):
 
 **Scenario D: Page reload mid-run replays broadcaster buffer**
 
-Browser-verified 2026-03-15 22:17–22:19 PDT against `agent-daemon-sse` running on port 61017.
+Browser-verified 2026-03-15 22:17–22:19 PDT against `loom-sse` running on port 61017.
 
 **Steps performed:**
 1. Created job `reload-test-long` via browser console fetch: `for i in $(seq 1 40); do echo "line $i"; sleep 2; done` (80s total)
@@ -295,9 +295,9 @@ Browser-verified 2026-03-15 22:17–22:19 PDT against `agent-daemon-sse` running
 | Criterion | Status |
 |---|---|
 | `scripts/test-sse.sh` is executable | ✅ Verified |
-| Binary (`agent-daemon-sse`) builds with zero errors | ✅ Verified |
+| Binary (`loom-sse`) builds with zero errors | ✅ Verified |
 | `go test ./internal/... -v` — all green | ✅ Verified |
-| `PORT=61017 bash scripts/test-sse.sh` — 10/10 | ✅ **PASS** (2026-03-16, against `agent-daemon-sse` on port 61017) |
+| `PORT=61017 bash scripts/test-sse.sh` — 10/10 | ✅ **PASS** (2026-03-16, against `loom-sse` on port 61017) |
 | Scenario A: running + completed cards simultaneously stable | ✅ Verified (backend API) |
 | Scenario B: copy button → no cursor char, no HTML entities | ✅ **PASS** (browser-verified 2026-03-16) |
 | Scenario C: two concurrent jobs — no cross-contamination | ✅ Verified (backend API) |

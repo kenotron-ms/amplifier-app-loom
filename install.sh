@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
-# install.sh — download and install agent-daemon to /usr/local/bin
-# Usage: curl -fsSL https://raw.githubusercontent.com/kenotron-ms/agent-daemon/main/install.sh | sh
+# install.sh — download and install loom to /usr/local/bin
+# Usage: curl -fsSL https://raw.githubusercontent.com/kenotron-ms/amplifier-app-loom/main/install.sh | sh
 set -e
 
-REPO="kenotron-ms/agent-daemon"
-BIN="agent-daemon"
+REPO="kenotron-ms/amplifier-app-loom"
+BIN="loom"
 INSTALL_DIR="/usr/local/bin"
 
 # ── Detect OS and arch ────────────────────────────────────────────────────────
@@ -94,21 +94,21 @@ fi
 # ── Amplifier bundle ─────────────────────────────────────────────────────────
 if command -v amplifier >/dev/null 2>&1; then
   echo "Registering Amplifier app bundle..."
-  if amplifier bundle add "git+https://github.com/kenotron-ms/agent-daemon@main" --app; then
+  if amplifier bundle add "git+https://github.com/kenotron-ms/amplifier-app-loom@main" --app; then
     echo "✓ Amplifier app bundle registered (active in every session)"
   else
     echo "⚠ Could not register Amplifier bundle — run manually:"
-    echo "    amplifier bundle add git+https://github.com/kenotron-ms/agent-daemon@main --app"
+    echo "    amplifier bundle add git+https://github.com/kenotron-ms/amplifier-app-loom@main --app"
   fi
 else
   echo ""
   echo "Note: Amplifier not found — skipping bundle registration."
   echo "      Once installed, run:"
-  echo "        amplifier bundle add git+https://github.com/kenotron-ms/agent-daemon@main --app"
+  echo "        amplifier bundle add git+https://github.com/kenotron-ms/amplifier-app-loom@main --app"
 fi
 
 echo ""
 echo "Next steps:"
-echo "  agent-daemon install   # register as a user-level service"
-echo "  agent-daemon start     # start the daemon"
+echo "  loom install   # register as a user-level service"
+echo "  loom start     # start the daemon"
 echo "  open http://localhost:7700"

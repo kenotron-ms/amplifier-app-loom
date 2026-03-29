@@ -12,7 +12,7 @@ const (
 	DefaultQueueSize   = 100
 )
 
-// UserContext holds the identity of the user who ran `agent-daemon install`.
+// UserContext holds the identity of the user who ran `loom install`.
 // It is captured once at install time — when the process is running in the
 // user's interactive shell session — and stored in the DB so the daemon can
 // recreate the user's environment when spawning jobs, even under launchd/

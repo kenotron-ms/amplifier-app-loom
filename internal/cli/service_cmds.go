@@ -9,10 +9,10 @@ import (
 	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/platform"
-	internalsvc "github.com/ms/agent-daemon/internal/service"
-	"github.com/ms/agent-daemon/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/platform"
+	internalsvc "github.com/ms/amplifier-app-loom/internal/service"
+	"github.com/ms/amplifier-app-loom/internal/store"
 )
 
 func installLevel(cmd *cobra.Command) internalsvc.InstallLevel {
@@ -25,13 +25,13 @@ func installLevel(cmd *cobra.Command) internalsvc.InstallLevel {
 
 var installCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Install agent-daemon as a service",
-	Long: `Install agent-daemon as a system service.
+	Short: "Install loom as a service",
+	Long: `Install loom as a system service.
 
 By default installs as a user-level service (login item / LaunchAgent / systemd --user).
 Use --system to install system-wide (starts at boot, requires admin/sudo).`,
-	Example: `  agent-daemon install              # user-level (login items)
-  sudo agent-daemon install --system  # system-wide (boot daemon)`,
+	Example: `  loom install              # user-level (login items)
+  sudo loom install --system  # system-wide (boot daemon)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		level := installLevel(cmd)
 		svc, err := internalsvc.NewServiceForControl(level)
@@ -49,7 +49,7 @@ Use --system to install system-wide (starts at boot, requires admin/sudo).`,
 		if level == internalsvc.LevelSystem {
 			levelStr = "system-level (boot daemon)"
 		}
-		fmt.Printf("✓ Installed agent-daemon as %s\n", levelStr)
+		fmt.Printf("✓ Installed loom as %s\n", levelStr)
 
 		// Absorb API keys and capture installing user's context into the DB.
 		fmt.Println("\nConfiguring AI assistant keys...")
@@ -76,25 +76,25 @@ Use --system to install system-wide (starts at boot, requires admin/sudo).`,
 					fmt.Println("  The AI assistant will not work until a key is configured.")
 					fmt.Println("  Options:")
 					fmt.Println("    1. Re-run with sudo -E to preserve env vars:")
-					fmt.Println("         sudo -E agent-daemon install --system")
+					fmt.Println("         sudo -E loom install --system")
 					fmt.Println("    2. After starting, open http://localhost:7700 → Settings")
-					fmt.Println("    3. Run:  sudo -E agent-daemon config absorb-env")
+					fmt.Println("    3. Run:  sudo -E loom config absorb-env")
 				} else if absorbed == 0 {
 					fmt.Println("  No API keys in environment — configure via http://localhost:7700 → Settings")
 				}
 			}
 		}
 
-		fmt.Println("\n  Run 'agent-daemon start' to start it.")
+		fmt.Println("\n  Run 'loom start' to start it.")
 		return nil
 	},
 }
 
 var uninstallCmd = &cobra.Command{
 	Use:   "uninstall",
-	Short: "Uninstall agent-daemon service",
-	Example: `  agent-daemon uninstall              # remove user-level service
-  sudo agent-daemon uninstall --system  # remove system-level service`,
+	Short: "Uninstall loom service",
+	Example: `  loom uninstall              # remove user-level service
+  sudo loom uninstall --system  # remove system-level service`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		level := installLevel(cmd)
 		svc, err := internalsvc.NewServiceForControl(level)
@@ -105,14 +105,14 @@ var uninstallCmd = &cobra.Command{
 		if err := service.Control(svc, "uninstall"); err != nil {
 			return fmt.Errorf("uninstall failed: %w", err)
 		}
-		fmt.Println("✓ agent-daemon service removed.")
+		fmt.Println("✓ loom service removed.")
 		return nil
 	},
 }
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start the agent-daemon service",
+	Short: "Start the loom service",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		level := installLevel(cmd)
 		svc, err := internalsvc.NewServiceForControl(level)
@@ -122,14 +122,14 @@ var startCmd = &cobra.Command{
 		if err := service.Control(svc, "start"); err != nil {
 			return fmt.Errorf("start failed: %w", err)
 		}
-		fmt.Println("✓ agent-daemon started.")
+		fmt.Println("✓ loom started.")
 		return nil
 	},
 }
 
 var stopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "Stop the agent-daemon service",
+	Short: "Stop the loom service",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		level := installLevel(cmd)
 		svc, err := internalsvc.NewServiceForControl(level)
@@ -139,7 +139,7 @@ var stopCmd = &cobra.Command{
 		if err := service.Control(svc, "stop"); err != nil {
 			return fmt.Errorf("stop failed: %w", err)
 		}
-		fmt.Println("✓ agent-daemon stopped.")
+		fmt.Println("✓ loom stopped.")
 		return nil
 	},
 }

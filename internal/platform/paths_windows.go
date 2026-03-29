@@ -13,11 +13,11 @@ func DataDir() string {
 		home, _ := os.UserHomeDir()
 		appdata = filepath.Join(home, "AppData", "Roaming")
 	}
-	return filepath.Join(appdata, "agent-daemon")
+	return filepath.Join(appdata, "loom")
 }
 
 func DBPath() string {
-	return filepath.Join(DataDir(), "agent-daemon.db")
+	return filepath.Join(DataDir(), "loom.db")
 }
 
 func ConfigPath() string {
@@ -25,9 +25,9 @@ func ConfigPath() string {
 }
 
 func LogPath() string {
-	return filepath.Join(DataDir(), "agent-daemon.log")
+	return filepath.Join(DataDir(), "loom.log")
 }
 
 func PIDPath() string {
-	return filepath.Join(DataDir(), "agent-daemon.pid")
+	return filepath.Join(DataDir(), "loom.pid")
 }

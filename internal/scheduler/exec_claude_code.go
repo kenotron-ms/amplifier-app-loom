@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 func (r *Runner) execClaudeCode(ctx context.Context, job *types.Job, runID string) (output string, exitCode int, err error) {

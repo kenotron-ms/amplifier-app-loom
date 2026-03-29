@@ -24,10 +24,10 @@ import (
 	"time"
 
 	"github.com/kardianos/service"
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/platform"
-	internalsvc "github.com/ms/agent-daemon/internal/service"
-	"github.com/ms/agent-daemon/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/platform"
+	internalsvc "github.com/ms/amplifier-app-loom/internal/service"
+	"github.com/ms/amplifier-app-loom/internal/store"
 )
 
 // wizardGoMessage is called from ObjC when JS posts to window.webkit.messageHandlers.agent.

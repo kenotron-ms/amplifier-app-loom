@@ -12,8 +12,8 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/ms/agent-daemon/internal/config"
-	"github.com/ms/agent-daemon/internal/types"
+	"github.com/ms/amplifier-app-loom/internal/config"
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 var (
