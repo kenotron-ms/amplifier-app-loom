@@ -31,21 +31,12 @@ type healthIssue struct {
 	fixKind string // "apikey" | "fda" | "service" | "cli" | "amplifier"
 }
 
-// pendingReExec is set by the update apply flow before calling systray.Quit().
-// The onQuit callback reads it and re-execs into the new binary.
-var pendingReExec string
-
 // Run launches the system tray app. Blocks until the user quits.
 // Must be called from the main goroutine.
 func Run(port int) error {
 	systray.Run(
 		func() { onReady(port) },
-		func() {
-			// If an update was applied, re-exec as tray once systray is fully shut down.
-			if pendingReExec != "" {
-				updater.ReExec(pendingReExec, "tray")
-			}
-		},
+		func() {},
 	)
 	return nil
 }
@@ -358,14 +349,22 @@ func onReady(port int) {
 			switch u.State() {
 			case updater.StateReady:
 				// Apply: stop service, swap binary, reinstall service.
-				// Then quit systray cleanly — the onQuit callback does the re-exec.
+				// Then spawn the new tray as a completely fresh process (so it
+				// gets its own clean macOS window-server registration) and quit
+				// the old one.
 				go func() {
 					newExe, err := u.Apply()
 					if err != nil {
 						slog.Error("tray: auto-update apply failed", "err", err)
 						return
 					}
-					pendingReExec = newExe
+					cmd := exec.Command(newExe, "tray")
+					if err := cmd.Start(); err != nil {
+						slog.Error("tray: relaunch failed", "path", newExe, "err", err)
+					} else {
+						slog.Info("tray: relaunched new tray", "pid", cmd.Process.Pid)
+						_ = cmd.Process.Release()
+					}
 					systray.Quit()
 				}()
 			case updater.StateFailed:
