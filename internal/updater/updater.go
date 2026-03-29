@@ -186,18 +186,16 @@ func (u *Updater) CheckAndStage(ctx context.Context) error {
 //  3. Atomically swap the staged binary into place
 //  4. Reinstall and start the service (with the new binary)
 //  5. Remove the .old backup
-//  6. Re-exec the current process as the new binary
 //
-// When reExecSubcmd is non-empty (e.g. "tray"), the current process is replaced
-// by the new binary via syscall.Exec — Apply does NOT return in that case.
-// When reExecSubcmd is empty, Apply returns nil after completing steps 1–5
-// and the caller is responsible for any restart.
-func (u *Updater) Apply(reExecSubcmd string) error {
+// It returns the path of the new binary so the caller can re-exec after doing
+// its own cleanup (e.g. quitting the systray loop before re-execing).
+// Use ReExec to perform the actual process replacement.
+func (u *Updater) Apply() (newExePath string, err error) {
 	u.mu.Lock()
 	if u.state != StateReady {
 		s := u.state
 		u.mu.Unlock()
-		return fmt.Errorf("update not staged (current state: %s)", s)
+		return "", fmt.Errorf("update not staged (current state: %s)", s)
 	}
 	stagingPath := u.stagingPath
 	u.state = StateApplying
@@ -212,7 +210,7 @@ func (u *Updater) Apply(reExecSubcmd string) error {
 	// the canonical path that the new binary will live at after the swap.
 	exePath, err := os.Executable()
 	if err != nil {
-		return u.fail(fmt.Errorf("resolve executable: %w", err))
+		return "", u.fail(fmt.Errorf("resolve executable: %w", err))
 	}
 
 	// ── 1. Detect install level ───────────────────────────────────────────────
@@ -240,12 +238,12 @@ func (u *Updater) Apply(reExecSubcmd string) error {
 	_ = os.Remove(oldPath)
 
 	if err := os.Rename(exePath, oldPath); err != nil {
-		return u.fail(fmt.Errorf("rename current binary to .old: %w", err))
+		return "", u.fail(fmt.Errorf("rename current binary to .old: %w", err))
 	}
 	if err := os.Rename(stagingPath, exePath); err != nil {
 		// Attempt rollback so the installation isn't left broken.
 		_ = os.Rename(oldPath, exePath)
-		return u.fail(fmt.Errorf("rename .tmp to binary: %w", err))
+		return "", u.fail(fmt.Errorf("rename .tmp to binary: %w", err))
 	}
 	if err := os.Chmod(exePath, 0755); err != nil {
 		slog.Warn("updater: chmod new binary", "err", err)
@@ -269,13 +267,9 @@ func (u *Updater) Apply(reExecSubcmd string) error {
 	// ── 5. Clean up .old ──────────────────────────────────────────────────────
 	_ = os.Remove(oldPath)
 
-	// ── 6. Re-exec ────────────────────────────────────────────────────────────
-	if reExecSubcmd != "" {
-		reExec(exePath, reExecSubcmd)
-		// reExec only returns on failure (or on Windows after spawning).
-	}
-
-	return nil
+	// Return the new binary path. The caller is responsible for re-execing
+	// after doing its own cleanup (e.g. quitting the systray loop).
+	return exePath, nil
 }
 
 func (u *Updater) fail(err error) error {
@@ -289,6 +283,14 @@ func (u *Updater) fail(err error) error {
 	}
 	slog.Error("updater: apply failed", "err", err)
 	return err
+}
+
+// ReExec replaces the current process with exePath running subcommand.
+// Call this after Apply() once any cleanup (e.g. systray.Quit()) is done.
+// On Unix, uses syscall.Exec — never returns on success.
+// On Windows, spawns a new process and exits.
+func ReExec(exePath, subcommand string) {
+	reExec(exePath, subcommand)
 }
 
 // CleanupOldBinary removes any <exe>.old file left by a previous update.

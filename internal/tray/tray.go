@@ -31,12 +31,21 @@ type healthIssue struct {
 	fixKind string // "apikey" | "fda" | "service" | "cli" | "amplifier"
 }
 
+// pendingReExec is set by the update apply flow before calling systray.Quit().
+// The onQuit callback reads it and re-execs into the new binary.
+var pendingReExec string
+
 // Run launches the system tray app. Blocks until the user quits.
 // Must be called from the main goroutine.
 func Run(port int) error {
 	systray.Run(
 		func() { onReady(port) },
-		func() {},
+		func() {
+			// If an update was applied, re-exec as tray once systray is fully shut down.
+			if pendingReExec != "" {
+				updater.ReExec(pendingReExec, "tray")
+			}
+		},
 	)
 	return nil
 }
@@ -348,12 +357,16 @@ func onReady(port int) {
 		case <-mUpdateAvail.ClickedCh:
 			switch u.State() {
 			case updater.StateReady:
-				// Apply the staged update: stop service, swap binary,
-				// reinstall service, then re-exec as tray.
+				// Apply: stop service, swap binary, reinstall service.
+				// Then quit systray cleanly — the onQuit callback does the re-exec.
 				go func() {
-					if err := u.Apply("tray"); err != nil {
+					newExe, err := u.Apply()
+					if err != nil {
 						slog.Error("tray: auto-update apply failed", "err", err)
+						return
 					}
+					pendingReExec = newExe
+					systray.Quit()
 				}()
 			case updater.StateFailed:
 				// Retry the check + download.

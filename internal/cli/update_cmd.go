@@ -47,11 +47,9 @@ The tray app (if running) will need to be relaunched separately after update.`,
 			return nil
 		case updater.StateReady:
 			// Apply: stop service → swap binary → reinstall service.
-			// Pass empty reExecSubcmd so we return instead of exec-ing;
-			// the daemon will be restarted by the service manager, and the
-			// user should relaunch the tray manually (or it auto-restarts
-			// if configured as a login item).
-			if err := u.Apply(""); err != nil {
+			// The daemon is restarted by the service manager automatically.
+			// The tray (if running) will need to be relaunched by the user.
+			if _, err := u.Apply(); err != nil {
 				return fmt.Errorf("apply update: %w", err)
 			}
 			fmt.Printf("\n✓ Updated to v%s. The daemon has been restarted.\n", u.LatestVersion())
