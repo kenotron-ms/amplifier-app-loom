@@ -122,6 +122,11 @@ func checkHealth(port int) []healthIssue {
 }
 
 func onReady(port int) {
+	// ── Bundle self-repair ────────────────────────────────────────────────────────────────────────
+	// Ensures Loom.icns is present in Contents/Resources/ even on installs
+	// that predate the icon or were updated via the binary-only updater.
+	repairBundle()
+
 	// ── Onboarding check (macOS .app launch only) ─────────────────────────
 	// Shows the first-run wizard if API key, UserContext, or FDA are missing.
 	if ost, err := store.Open(platform.DBPath()); err != nil {
