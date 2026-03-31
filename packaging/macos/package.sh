@@ -57,6 +57,9 @@ chmod +x "$APP_DIR/Contents/MacOS/loom"
 
 sed "s/{{VERSION}}/$VERSION/g" "$SCRIPT_DIR/Info.plist" > "$APP_DIR/Contents/Info.plist"
 
+# Copy app icon
+cp "$SCRIPT_DIR/Loom.icns" "$APP_DIR/Contents/Resources/Loom.icns"
+
 # ── Code sign ─────────────────────────────────────────────────────────────────
 echo "==> Signing..."
 codesign \
@@ -91,16 +94,25 @@ echo "    Staple OK"
 
 # ── Create DMG ────────────────────────────────────────────────────────────────
 echo "==> Creating DMG..."
-STAGING=$(mktemp -d)
-cp -R "$APP_DIR" "$STAGING/"
-ln -s /Applications "$STAGING/Applications"
 
-hdiutil create \
-    -volname "Loom $VERSION" \
-    -srcfolder "$STAGING" \
-    -ov \
-    -format UDZO \
-    "$DIST_DIR/$DMG_NAME"
+# Install create-dmg if needed (no-op if already present)
+if ! command -v create-dmg &>/dev/null; then
+    echo "    Installing create-dmg..."
+    brew install create-dmg --quiet
+fi
+
+create-dmg \
+    --volname "Loom $VERSION" \
+    --volicon "$SCRIPT_DIR/Loom.icns" \
+    --background "$SCRIPT_DIR/dmg-background.png" \
+    --window-pos 200 120 \
+    --window-size 616 432 \
+    --icon-size 100 \
+    --icon "Loom.app" 154 216 \
+    --hide-extension "Loom.app" \
+    --app-drop-link 462 216 \
+    "$DIST_DIR/$DMG_NAME" \
+    "$APP_DIR"
 
 # Sign the DMG itself
 codesign \
@@ -108,7 +120,6 @@ codesign \
     --timestamp \
     "$DIST_DIR/$DMG_NAME"
 
-rm -rf "$STAGING"
 echo "==> Done: $DIST_DIR/$DMG_NAME"
 
 # ── Cleanup keychain ──────────────────────────────────────────────────────────

@@ -21,6 +21,8 @@
     <!-- LSUIElement = true: menu bar only app, no Dock icon -->
     <key>LSUIElement</key>
     <true/>
+    <key>CFBundleIconFile</key>
+    <string>Loom</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSPrincipalClass</key>
