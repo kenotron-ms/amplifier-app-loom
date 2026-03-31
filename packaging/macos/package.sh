@@ -28,7 +28,7 @@ APPLE_ID="ken@gizzar.com"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DIST_DIR="$(cd "$(dirname "$BINARY")" && pwd)"
-APP_NAME="AgentDaemon"
+APP_NAME="Loom"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
 DMG_NAME="loom-darwin-$ARCH.dmg"
 KEYCHAIN_NAME="loom-build.keychain"
@@ -73,16 +73,16 @@ echo "    Signature OK"
 
 # ── Notarize ──────────────────────────────────────────────────────────────────
 echo "==> Notarizing (this takes a minute)..."
-ditto -c -k --keepParent "$APP_DIR" /tmp/AgentDaemon-notarize.zip
+ditto -c -k --keepParent "$APP_DIR" /tmp/Loom-notarize.zip
 
-xcrun notarytool submit /tmp/AgentDaemon-notarize.zip \
+xcrun notarytool submit /tmp/Loom-notarize.zip \
     --apple-id "$APPLE_ID" \
     --password "$APPLE_APP_PASSWORD" \
     --team-id "$APPLE_TEAM_ID" \
     --wait \
     --timeout 10m
 
-rm -f /tmp/AgentDaemon-notarize.zip
+rm -f /tmp/Loom-notarize.zip
 
 echo "==> Stapling..."
 xcrun stapler staple "$APP_DIR"

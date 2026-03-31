@@ -6,7 +6,7 @@ set -euo pipefail
 
 REPO="kenotron-ms/amplifier-app-loom"
 BINARY="loom"
-APP_NAME="AgentDaemon"
+APP_NAME="Loom"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -149,7 +149,7 @@ if [ "$OS" = "darwin" ]; then
   echo "Launching menu bar app..."
   echo ""
   open "/Applications/${APP_NAME}.app"
-  success "AgentDaemon launched — look for the icon in your menu bar"
+  success "Loom launched — look for the icon in your menu bar"
 fi
 
 # ── Amplifier bundle ───────────────────────────────────────────────────────────
@@ -176,6 +176,6 @@ echo ""
 echo "  Status:  loom status"
 echo "  Web UI:  http://localhost:7700"
 if [ "$OS" = "darwin" ]; then
-echo "  Tray:    Look for the AgentDaemon icon in your menu bar"
+echo "  Tray:    Look for the Loom icon in your menu bar"
 fi
 echo ""

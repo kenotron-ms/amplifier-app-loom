@@ -7,7 +7,7 @@
 
 ## Problem Statement
 
-When a user downloads `AgentDaemon.app` and opens it for the first time, nothing guides
+When a user downloads `Loom.app` and opens it for the first time, nothing guides
 them to a working installation. Three silent failure modes exist:
 
 1. **No API key** — the daemon starts but cannot run any AI-powered jobs; no feedback is shown
@@ -206,7 +206,7 @@ user will see in System Settings and what to click.
 
 **Contents of the graphic:**
 - Realistic macOS System Settings window (Privacy & Security → Full Disk Access pane)
-- "AgentDaemon" entry visible in the Full Disk Access list (toggle OFF)
+- "Loom" entry visible in the Full Disk Access list (toggle OFF)
 - Two callout annotations:
   1. Red circle "1" with arrow → "Find Loom in this list"
   2. Red circle "2" with arrow → toggle switch → "Toggle this ON"
