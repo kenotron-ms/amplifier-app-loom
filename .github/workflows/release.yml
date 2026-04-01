@@ -65,6 +65,20 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.cgo == '1'
         run: sudo apt-get update && sudo apt-get install -y --fix-missing gcc libayatana-appindicator3-dev
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build UI
+        shell: bash
+        run: |
+          cd ui && npm install && npm run build
+          cd ..
+          rm -rf web/dist
+          cp -r ui/dist web/dist
+
       - name: Build
         shell: bash
         env:
