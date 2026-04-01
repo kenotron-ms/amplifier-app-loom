@@ -169,7 +169,13 @@ func (s *Server) spawnTerminal(w http.ResponseWriter, r *http.Request) {
 	// Key by session ID — each session gets its own independent shell process.
 	// Clicking the same session multiple times reuses the same PTY (dedup by session ID).
 	key := sess.ID
-	processID, err := s.ptyMgr.Spawn(key, sess.WorktreePath, []string{"amplifier", "run", "--mode", "chat"})
+	// Build the amplifier command. If a previous session exists for this
+	// working directory, resume it so the user lands back in context immediately.
+	ampCmd := []string{"amplifier", "run", "--mode", "chat"}
+	if meta, err2 := amplifier.NewestSession(sess.WorktreePath, time.Time{}); err2 == nil && meta != nil && meta.SessionID != "" {
+		ampCmd = append(ampCmd, "--resume", meta.SessionID)
+	}
+	processID, err := s.ptyMgr.Spawn(key, sess.WorktreePath, ampCmd)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

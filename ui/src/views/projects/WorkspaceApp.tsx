@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import {
   Project, Session,
   listProjects, createProject, deleteProject,
@@ -252,9 +253,9 @@ export default function WorkspaceApp() {
         )}
       </div>
 
-      {/* Main area */}
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main area — resizable split between terminal and right panel */}
+      <PanelGroup direction="horizontal" className="flex-1 overflow-hidden">
+        <Panel minSize={20} className="flex flex-col overflow-hidden">
           {/* Session header — only shown when a session is active */}
           {activeProject && activeSession && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-[#161b22] border-b border-[#30363d] shrink-0">
@@ -324,19 +325,22 @@ export default function WorkspaceApp() {
               </div>
             ))}
           </div>
-        </div>
+        </Panel>
 
         {rightPanel && activeProject && activeSession && (
-          <div className="w-80 shrink-0 border-l border-[#30363d] flex flex-col">
-            {rightPanel === 'files' && (
-              <FileViewer projectId={activeProject.id} sessionId={activeSession.id} />
-            )}
-            {rightPanel === 'stats' && (
-              <SessionStatsPanel project={activeProject} session={activeSession} />
-            )}
-          </div>
+          <>
+            <PanelResizeHandle className="w-1 bg-[#30363d] hover:bg-[#58a6ff] transition-colors cursor-col-resize" />
+            <Panel defaultSize={50} minSize={20} className="flex flex-col overflow-hidden">
+              {rightPanel === 'files' && (
+                <FileViewer projectId={activeProject.id} sessionId={activeSession.id} />
+              )}
+              {rightPanel === 'stats' && (
+                <SessionStatsPanel project={activeProject} session={activeSession} />
+              )}
+            </Panel>
+          </>
         )}
-      </div>
+      </PanelGroup>
 
       {/* New Project modal */}
       {showNewProject && (
