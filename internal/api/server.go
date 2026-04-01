@@ -182,6 +182,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Directory name → full path resolver (used after browser showDirectoryPicker())
 	mux.HandleFunc("GET /api/filesystem/pick-folder", s.pickFolder)
 	mux.HandleFunc("GET /api/filesystem/find-dir", s.findDir)
+
+	// Feedback → files a GitHub issue via gh CLI
+	mux.HandleFunc("POST /api/feedback", s.createFeedback)
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import ProjectsView from './views/projects'
 import JobsView from './views/jobs'
 import MirrorView from './views/mirror'
+import FeedbackModal from './components/FeedbackModal'
 
 type Tab = 'projects' | 'jobs' | 'mirror'
 
@@ -12,7 +13,8 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 export default function App() {
-  const [active, setActive] = useState<Tab>('projects')
+  const [active, setActive]           = useState<Tab>('projects')
+  const [showFeedback, setShowFeedback] = useState(false)
 
   return (
     <div className="flex flex-col h-full bg-[#0d1117]">
@@ -37,6 +39,15 @@ export default function App() {
             </button>
           ))}
         </div>
+
+        {/* Feedback button — right-aligned */}
+        <button
+          onClick={() => setShowFeedback(true)}
+          className="ml-auto text-[10px] px-2 py-0.5 rounded bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#30363d] transition-colors"
+          title="Send feedback or report a bug"
+        >
+          Feedback
+        </button>
       </nav>
 
       {/* Mode content */}
@@ -45,6 +56,8 @@ export default function App() {
         {active === 'jobs'     && <JobsView />}
         {active === 'mirror'   && <MirrorView />}
       </div>
+
+      {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
     </div>
   )
 }
