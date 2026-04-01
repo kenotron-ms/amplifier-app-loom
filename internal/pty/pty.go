@@ -1,6 +1,7 @@
 package pty
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -157,10 +158,22 @@ func (m *Manager) ServeWS(w http.ResponseWriter, r *http.Request, processID stri
 	}()
 
 	// WebSocket → PTY stdin (main loop)
+	// Messages are either raw keystrokes or a control envelope:
+	//   {"type":"resize","cols":N,"rows":N}  → resize the PTY (do NOT forward to process)
+	//   anything else                         → raw stdin for the running process
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			return
+		}
+		var ctrl struct {
+			Type string `json:"type"`
+			Cols uint16 `json:"cols"`
+			Rows uint16 `json:"rows"`
+		}
+		if json.Unmarshal(msg, &ctrl) == nil && ctrl.Type == "resize" {
+			creackpty.Setsize(p.ptm, &creackpty.Winsize{Cols: ctrl.Cols, Rows: ctrl.Rows}) //nolint:errcheck
+			continue
 		}
 		if _, err := p.ptm.Write(msg); err != nil {
 			return

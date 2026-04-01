@@ -93,11 +93,14 @@ export function XTermTerminal({ processId, onData }: Props) {
         if (d && d.cols > 0 && d.rows > 0) term.resize(d.cols, d.rows)
       } catch { /* RenderService not ready yet — rAF handles it */ }
 
-      // Update registry cols/rows on every real resize
+      // On resize: update registry dims AND send resize envelope over the WebSocket.
+      // The backend intercepts {"type":"resize",...} and calls creackpty.Setsize
+      // so the PTY grid matches the xterm viewport — no raw JSON leaks to the process.
       term.onResize(({ cols, rows }) => {
         const reg = (window as any).__terminalRegistry as TerminalRegistry
         const entry = reg.terminals.get(processId)
         if (entry) { entry.cols = cols; entry.rows = rows }
+        onDataRef.current(JSON.stringify({ type: 'resize', cols, rows }))
       })
 
       // Replay buffer — find last full clear/alt-screen so we skip stale intermediate
