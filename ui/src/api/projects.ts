@@ -52,12 +52,11 @@ export async function listSessions(projectId: string): Promise<Session[]> {
 export async function createSession(
   projectId: string,
   name: string,
-  worktreePath: string,
 ): Promise<Session> {
   const res = await fetch(`/api/projects/${projectId}/sessions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, worktreePath }),
+    body: JSON.stringify({ name }),
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json()

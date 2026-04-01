@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"os/exec"
 
 	"github.com/ms/amplifier-app-loom/internal/files"
 )
@@ -102,35 +101,24 @@ func (s *Server) listSessions(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 	projectID := r.PathValue("id")
 	var req struct {
-		Name         string `json:"name"`
-		WorktreePath string `json:"worktreePath"`
+		Name string `json:"name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
-		return
-	}
-	if req.WorktreePath == "" {
-		writeError(w, http.StatusBadRequest, "worktreePath is required")
 		return
 	}
 	if req.Name == "" {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
-	// create git worktree if directory doesn't exist
-	if _, err := os.Stat(req.WorktreePath); os.IsNotExist(err) {
-		p, err := s.workspaceStore.GetProject(r.Context(), projectID)
-		if err != nil {
-			writeError(w, http.StatusNotFound, "project not found")
-			return
-		}
-		out, err := exec.CommandContext(r.Context(), "git", "-C", p.Path, "worktree", "add", req.WorktreePath, req.Name).CombinedOutput()
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "git worktree add: "+string(out))
-			return
-		}
+	// A session runs in the project's root directory by default.
+	// Worktree association is a separate, optional operation — not required to create a session.
+	p, err := s.workspaceStore.GetProject(r.Context(), projectID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "project not found")
+		return
 	}
-	sess, err := s.workspaceStore.CreateSession(r.Context(), projectID, req.Name, req.WorktreePath)
+	sess, err := s.workspaceStore.CreateSession(r.Context(), projectID, req.Name, p.Path)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

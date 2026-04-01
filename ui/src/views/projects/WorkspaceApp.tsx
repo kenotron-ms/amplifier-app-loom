@@ -178,9 +178,8 @@ export default function WorkspaceApp() {
   async function handleCreateSession() {
     if (!activeProject || !newSessionName) return
     setSessionError('')
-    const worktreePath = `${activeProject.path}/.worktrees/${newSessionName}`
     try {
-      const s = await createSession(activeProject.id, newSessionName, worktreePath)
+      const s = await createSession(activeProject.id, newSessionName)
       setSessions(ss => [...ss, s])
       setShowNewSession(false)
       setNewSessionName('')
@@ -346,12 +345,11 @@ export default function WorkspaceApp() {
           <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5 w-80">
             <h3 className="text-sm font-semibold text-[#e6edf3] mb-1">New Session</h3>
             <p className="text-[10px] text-[#484f58] mb-4">
-              Creates a git worktree at <span className="text-[#8b949e]">{activeProject.path}/.worktrees/&lt;name&gt;</span>.
-              Must be an existing branch or HEAD.
+              Opens a terminal in <span className="text-[#8b949e]">{activeProject.path}</span>
             </p>
             <input
               className="w-full mb-2 px-3 py-1.5 text-sm bg-[#0d1117] border border-[#30363d] rounded text-[#e6edf3] placeholder:text-[#8b949e] focus:outline-none focus:border-[#58a6ff]"
-              placeholder="Branch name (e.g. main, feature/x)"
+              placeholder="Session name (e.g. main, debug, review)"
               value={newSessionName}
               onChange={e => { setNewSessionName(e.target.value); setSessionError('') }}
               onKeyDown={e => e.key === 'Enter' && handleCreateSession()}
