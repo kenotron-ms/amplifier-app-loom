@@ -29,3 +29,6 @@ canvas_worktrees/
 web/dist/
 ui/dist/
 ui/node_modules/
+
+# TypeScript incremental build cache (regenerated on every tsc -b run)
+*.tsbuildinfo
