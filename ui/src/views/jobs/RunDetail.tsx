@@ -11,17 +11,29 @@ export default function RunDetail({ job }: Props) {
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const logLines = useRunStream(activeRunId)
 
+  const refreshRuns = async (jobId: string) => {
+    try {
+      const rs = await listJobRuns(jobId)
+      const safe = rs ?? []
+      setRuns(safe)
+      if (safe.length > 0) setActiveRunId(safe[0].id)
+    } catch (e) {
+      console.error('listJobRuns:', e)
+    }
+  }
+
   useEffect(() => {
-    listJobRuns(job.id).then(rs => {
-      setRuns(rs)
-      if (rs.length > 0 && !activeRunId) setActiveRunId(rs[0].id)
-    })
+    refreshRuns(job.id)
   }, [job.id])
 
   const handleTrigger = async () => {
-    const run = await triggerJob(job.id)
-    setRuns(prev => [run, ...prev])
-    setActiveRunId(run.id)
+    try {
+      await triggerJob(job.id)
+      // Poll for the new run after a short delay — API returns {status:"triggered"}, not a run
+      setTimeout(() => refreshRuns(job.id), 800)
+    } catch (e) {
+      console.error('triggerJob:', e)
+    }
   }
 
   const statusBadge = (status: string) => {
@@ -78,7 +90,7 @@ export default function RunDetail({ job }: Props) {
       <div className="flex-1 overflow-y-auto font-mono text-[11px] text-[#e6edf3] bg-[#0d1117] p-4 leading-relaxed">
         {logLines.length > 0
           ? logLines.map((line, i) => <div key={i}>{line}</div>)
-          : <span className="text-[#8b949e]">No output yet</span>
+          : <span className="text-[#8b949e]">No output yet — click ▶ Run Now to trigger a run.</span>
         }
       </div>
     </div>

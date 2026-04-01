@@ -64,13 +64,7 @@ function useTerminal(containerRef: React.RefObject<HTMLDivElement | null>, proce
 
 // ── File browser panel ────────────────────────────────────────────────────────
 
-function FileBrowserPanel({
-  projectId,
-  sessionId,
-}: {
-  projectId: string
-  sessionId: string
-}) {
+function FileBrowserPanel({ projectId, sessionId }: { projectId: string; sessionId: string }) {
   const [entries, setEntries] = useState<FileEntry[]>([])
   const [path, setPath] = useState('')
   const [loading, setLoading] = useState(false)
@@ -122,18 +116,28 @@ export default function WorkspaceApp() {
   const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [processId, setProcessId] = useState<string | null>(null)
+  const [showFiles, setShowFiles] = useState(false)
+
+  // New Project modal
   const [showNewProject, setShowNewProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const [newProjectPath, setNewProjectPath] = useState('')
-  const [showFiles, setShowFiles] = useState(false)
+
+  // New Session modal
+  const [showNewSession, setShowNewSession] = useState(false)
+  const [newSessionName, setNewSessionName] = useState('')
+  const [sessionError, setSessionError] = useState('')
+
   const termContainerRef = useRef<HTMLDivElement>(null)
 
   useTerminal(termContainerRef, processId)
 
-  // Load projects on mount
   useEffect(() => {
     listProjects()
-      .then(ps => { setProjects(ps); if (ps.length > 0) selectProject(ps[0]) })
+      .then(ps => {
+        setProjects(ps)
+        if (ps.length > 0) selectProject(ps[0])
+      })
       .catch(console.error)
   }, [])
 
@@ -141,7 +145,7 @@ export default function WorkspaceApp() {
     setActiveProject(p)
     setActiveSession(null)
     setProcessId(null)
-    const ss = await listSessions(p.id)
+    const ss = await listSessions(p.id).catch(() => [] as Session[])
     setSessions(ss)
     if (ss.length > 0) selectSession(p, ss[0])
   }
@@ -149,7 +153,6 @@ export default function WorkspaceApp() {
   async function selectSession(p: Project, s: Session) {
     setActiveSession(s)
     setProcessId(null)
-    // spawn PTY for this session
     try {
       const { processId: pid } = await spawnTerminal(p.id, s.id)
       setProcessId(pid)
@@ -160,22 +163,32 @@ export default function WorkspaceApp() {
 
   async function handleCreateProject() {
     if (!newProjectName || !newProjectPath) return
-    const p = await createProject(newProjectName, newProjectPath)
-    setProjects(ps => [...ps, p])
-    setShowNewProject(false)
-    setNewProjectName('')
-    setNewProjectPath('')
-    selectProject(p)
+    try {
+      const p = await createProject(newProjectName, newProjectPath)
+      setProjects(ps => [...ps, p])
+      setShowNewProject(false)
+      setNewProjectName('')
+      setNewProjectPath('')
+      selectProject(p)
+    } catch (e) {
+      console.error('createProject:', e)
+    }
   }
 
   async function handleCreateSession() {
-    if (!activeProject) return
-    const branch = prompt('Session name (branch):')
-    if (!branch) return
-    const worktreePath = `${activeProject.path}/.worktrees/${branch}`
-    const s = await createSession(activeProject.id, branch, worktreePath)
-    setSessions(ss => [...ss, s])
-    selectSession(activeProject, s)
+    if (!activeProject || !newSessionName) return
+    setSessionError('')
+    const worktreePath = `${activeProject.path}/.worktrees/${newSessionName}`
+    try {
+      const s = await createSession(activeProject.id, newSessionName, worktreePath)
+      setSessions(ss => [...ss, s])
+      setShowNewSession(false)
+      setNewSessionName('')
+      selectSession(activeProject, s)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setSessionError(msg)
+    }
   }
 
   return (
@@ -188,6 +201,7 @@ export default function WorkspaceApp() {
           <button
             onClick={() => setShowNewProject(true)}
             className="text-[#58a6ff] text-xs hover:text-[#e6edf3]"
+            aria-label="New project"
           >+</button>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -213,10 +227,14 @@ export default function WorkspaceApp() {
             <div className="flex items-center justify-between px-3 py-2 border-t border-b border-[#30363d]">
               <span className="text-[#8b949e] text-[10px] uppercase tracking-wider">Sessions</span>
               <button
-                onClick={handleCreateSession}
+                onClick={() => { setShowNewSession(true); setSessionError('') }}
                 className="text-[#58a6ff] text-xs hover:text-[#e6edf3]"
+                aria-label="New session"
               >+</button>
             </div>
+            {sessions.length === 0 && (
+              <div className="px-3 py-2 text-[10px] text-[#484f58]">No sessions yet</div>
+            )}
             {sessions.map(s => (
               <button
                 key={s.id}
@@ -229,7 +247,7 @@ export default function WorkspaceApp() {
                 <div className={`text-[11px] truncate ${activeSession?.id === s.id ? 'text-[#e6edf3]' : 'text-[#8b949e]'}`}>
                   {s.name}
                 </div>
-                <div className="text-[10px] text-[#8b949e]">{s.status}</div>
+                <div className="text-[10px] text-[#484f58]">{s.status}</div>
               </button>
             ))}
           </>
@@ -238,7 +256,6 @@ export default function WorkspaceApp() {
 
       {/* Main area */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Terminal */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {activeProject && activeSession ? (
             <>
@@ -254,6 +271,19 @@ export default function WorkspaceApp() {
               </div>
               <div ref={termContainerRef} className="flex-1 overflow-hidden" />
             </>
+          ) : activeProject ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center text-[#8b949e]">
+                <div className="text-sm font-medium text-[#e6edf3] mb-1">{activeProject.name}</div>
+                <div className="text-xs mb-3 text-[#484f58]">{activeProject.path}</div>
+                <button
+                  onClick={() => { setShowNewSession(true); setSessionError('') }}
+                  className="text-xs px-3 py-1.5 bg-[#21262d] border border-[#30363d] rounded text-[#e6edf3] hover:bg-[#30363d]"
+                >
+                  + New Session
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center text-[#8b949e]">
@@ -269,7 +299,6 @@ export default function WorkspaceApp() {
           )}
         </div>
 
-        {/* File browser */}
         {showFiles && activeProject && activeSession && (
           <div className="w-52 shrink-0">
             <FileBrowserPanel projectId={activeProject.id} sessionId={activeSession.id} />
@@ -277,7 +306,7 @@ export default function WorkspaceApp() {
         )}
       </div>
 
-      {/* New project modal */}
+      {/* New Project modal */}
       {showNewProject && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5 w-80">
@@ -287,12 +316,15 @@ export default function WorkspaceApp() {
               placeholder="Project name"
               value={newProjectName}
               onChange={e => setNewProjectName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreateProject()}
+              autoFocus
             />
             <input
               className="w-full mb-4 px-3 py-1.5 text-sm bg-[#0d1117] border border-[#30363d] rounded text-[#e6edf3] placeholder:text-[#8b949e] focus:outline-none focus:border-[#58a6ff]"
               placeholder="/absolute/path/to/codebase"
               value={newProjectPath}
               onChange={e => setNewProjectPath(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreateProject()}
             />
             <div className="flex gap-2 justify-end">
               <button
@@ -303,6 +335,42 @@ export default function WorkspaceApp() {
                 onClick={handleCreateProject}
                 className="px-3 py-1.5 text-xs bg-[#238636] hover:bg-[#2ea043] text-white rounded"
               >Create</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Session modal */}
+      {showNewSession && activeProject && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5 w-80">
+            <h3 className="text-sm font-semibold text-[#e6edf3] mb-1">New Session</h3>
+            <p className="text-[10px] text-[#484f58] mb-4">
+              Creates a git worktree at <span className="text-[#8b949e]">{activeProject.path}/.worktrees/&lt;name&gt;</span>.
+              Must be an existing branch or HEAD.
+            </p>
+            <input
+              className="w-full mb-2 px-3 py-1.5 text-sm bg-[#0d1117] border border-[#30363d] rounded text-[#e6edf3] placeholder:text-[#8b949e] focus:outline-none focus:border-[#58a6ff]"
+              placeholder="Branch name (e.g. main, feature/x)"
+              value={newSessionName}
+              onChange={e => { setNewSessionName(e.target.value); setSessionError('') }}
+              onKeyDown={e => e.key === 'Enter' && handleCreateSession()}
+              autoFocus
+            />
+            {sessionError && (
+              <div className="text-[10px] text-[#f85149] bg-[#3a1a1a] rounded px-2 py-1 mb-2">
+                {sessionError}
+              </div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setShowNewSession(false); setNewSessionName(''); setSessionError('') }}
+                className="px-3 py-1.5 text-xs text-[#8b949e] hover:text-[#e6edf3]"
+              >Cancel</button>
+              <button
+                onClick={handleCreateSession}
+                className="px-3 py-1.5 text-xs bg-[#238636] hover:bg-[#2ea043] text-white rounded"
+              >Create Session</button>
             </div>
           </div>
         </div>

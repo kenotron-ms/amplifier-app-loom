@@ -2,13 +2,15 @@ import { useState } from 'react'
 import ProjectsView from './views/projects'
 import JobsView from './views/jobs'
 import MirrorView from './views/mirror'
+import ChatView from './views/chat'
 
-type Tab = 'projects' | 'jobs' | 'mirror'
+type Tab = 'projects' | 'jobs' | 'mirror' | 'chat'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'projects', label: 'Projects' },
   { id: 'jobs',     label: 'Jobs' },
   { id: 'mirror',   label: 'Mirror' },
+  { id: 'chat',     label: 'Chat' },
 ]
 
 export default function App() {
@@ -44,6 +46,7 @@ export default function App() {
         {active === 'projects' && <ProjectsView />}
         {active === 'jobs'     && <JobsView />}
         {active === 'mirror'   && <MirrorView />}
+        {active === 'chat'     && <ChatView />}
       </div>
     </div>
   )
