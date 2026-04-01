@@ -24,3 +24,11 @@ packaging/macos/setup-github-secrets.sh
 
 # Canvas worktree sessions
 canvas_worktrees/
+
+# Frontend build artifacts
+web/dist/
+ui/dist/
+ui/node_modules/
+
+# TypeScript incremental build cache (regenerated on every tsc -b run)
+*.tsbuildinfo

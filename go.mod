@@ -5,8 +5,10 @@ go 1.25.6
 require (
 	fyne.io/systray v1.12.0
 	github.com/anthropics/anthropic-sdk-go v1.26.0
+	github.com/creack/pty v1.1.24
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/google/uuid v1.6.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/kardianos/service v1.2.4
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/cobra v1.10.2

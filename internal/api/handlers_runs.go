@@ -3,6 +3,8 @@ package api
 import (
 	"net/http"
 	"strconv"
+
+	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
 func (s *Server) listRuns(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +44,9 @@ func (s *Server) listJobRuns(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if runs == nil {
+		runs = []*types.JobRun{}
 	}
 	writeJSON(w, http.StatusOK, runs)
 }

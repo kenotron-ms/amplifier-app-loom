@@ -6,8 +6,8 @@ import (
 	"io/fs"
 )
 
-//go:embed *.html *.js *.css
+//go:embed dist
 var files embed.FS
 
-// FS exposes only the web files (without the embed.go itself).
-var FS, _ = fs.Sub(files, ".")
+// FS exposes only the built UI files (web/dist/ contents).
+var FS, _ = fs.Sub(files, "dist")

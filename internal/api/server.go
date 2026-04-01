@@ -10,9 +10,11 @@ import (
 	"github.com/ms/amplifier-app-loom/internal/config"
 	"github.com/ms/amplifier-app-loom/internal/mirror"
 	"github.com/ms/amplifier-app-loom/internal/nl"
+	loompty "github.com/ms/amplifier-app-loom/internal/pty"
 	"github.com/ms/amplifier-app-loom/internal/queue"
 	"github.com/ms/amplifier-app-loom/internal/scheduler"
 	"github.com/ms/amplifier-app-loom/internal/store"
+	"github.com/ms/amplifier-app-loom/internal/workspaces"
 )
 
 // Server is the HTTP server for the web UI and REST API.
@@ -26,8 +28,13 @@ type Server struct {
 	nlClient    nl.NLClient
 	nlMu        sync.RWMutex
 	httpSrv     *http.Server
-	mirrorStore *mirror.MirrorStore
-	syncEngine  *mirror.SyncEngine
+	mirrorStore    *mirror.MirrorStore
+	syncEngine     *mirror.SyncEngine
+	workspaceStore  *workspaces.Service
+	ptyMgr          *loompty.Manager
+	watchedSessions sync.Map // sessionID → struct{}: tracks in-flight name watchers
+	muxOnce        sync.Once
+	mux            *http.ServeMux
 }
 
 func NewServer(cfg *config.Config, s store.Store, sched *scheduler.Scheduler, q *queue.BoundedQueue, startedAt time.Time, b *scheduler.Broadcaster) *Server {
@@ -48,6 +55,21 @@ func NewServer(cfg *config.Config, s store.Store, sched *scheduler.Scheduler, q 
 func (s *Server) SetMirror(ms *mirror.MirrorStore, se *mirror.SyncEngine) {
 	s.mirrorStore = ms
 	s.syncEngine = se
+}
+
+// SetWorkspaces wires the workspace subsystem (projects, PTY) into the server.
+func (s *Server) SetWorkspaces(ws *workspaces.Service, mgr *loompty.Manager) {
+	s.workspaceStore = ws
+	s.ptyMgr = mgr
+}
+
+// ServeHTTP implements http.Handler for use in tests.
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.muxOnce.Do(func() {
+		s.mux = http.NewServeMux()
+		s.registerRoutes(s.mux)
+	})
+	s.mux.ServeHTTP(w, r)
 }
 
 func (s *Server) reinitNLClient() {
@@ -134,6 +156,32 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Mirror — changes
 	mux.HandleFunc("GET /api/mirror/changes", s.listChanges)
 	mux.HandleFunc("POST /api/mirror/changes/prune", s.pruneChanges)
+
+	// Projects
+	mux.HandleFunc("GET /api/projects", s.listProjects)
+	mux.HandleFunc("POST /api/projects", s.createProject)
+	mux.HandleFunc("GET /api/projects/{id}", s.getProject)
+	mux.HandleFunc("PATCH /api/projects/{id}", s.updateProject)
+	mux.HandleFunc("DELETE /api/projects/{id}", s.deleteProject)
+
+	// Sessions
+	mux.HandleFunc("GET /api/projects/{id}/sessions", s.listSessions)
+	mux.HandleFunc("POST /api/projects/{id}/sessions", s.createSession)
+	mux.HandleFunc("DELETE /api/projects/{id}/sessions/{sid}", s.deleteSession)
+
+	// Terminal
+	mux.HandleFunc("POST /api/projects/{id}/sessions/{sid}/terminal", s.spawnTerminal)
+	mux.HandleFunc("/api/terminal/{processId}", s.handleTerminalWS)
+	mux.HandleFunc("POST /api/terminal/{processId}/resize", s.resizeTerminal)
+
+	// Files + Stats
+	mux.HandleFunc("GET /api/projects/{id}/sessions/{sid}/files", s.listFiles)
+	mux.HandleFunc("GET /api/projects/{id}/sessions/{sid}/files/{path...}", s.readFile)
+	mux.HandleFunc("GET /api/projects/{id}/sessions/{sid}/stats", s.getSessionStats)
+
+	// Directory name → full path resolver (used after browser showDirectoryPicker())
+	mux.HandleFunc("GET /api/filesystem/pick-folder", s.pickFolder)
+	mux.HandleFunc("GET /api/filesystem/find-dir", s.findDir)
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
