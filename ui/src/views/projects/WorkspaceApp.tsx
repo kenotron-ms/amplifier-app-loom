@@ -4,7 +4,7 @@ import {
   Project, Session,
   listProjects, createProject, deleteProject,
   listSessions, createSession, deleteSession, spawnTerminal,
-  findDir,
+  pickFolder, canPickFolder,
 } from '../../api/projects'
 import FileViewer from './FileViewer'
 import SessionStatsPanel from './SessionStats'
@@ -25,7 +25,8 @@ export default function WorkspaceApp() {
   // New Project modal
   const [showNewProject, setShowNewProject] = useState(false)
   const [newProjectPath, setNewProjectPath] = useState('')
-  const canBrowse = 'showDirectoryPicker' in window
+  const [canBrowse, setCanBrowse] = useState(false)
+  useEffect(() => { canPickFolder().then(setCanBrowse).catch(() => setCanBrowse(false)) }, [])
 
   const [creatingSession, setCreatingSession] = useState(false)
 
@@ -115,26 +116,10 @@ export default function WorkspaceApp() {
 
   async function handleBrowse() {
     try {
-      // showDirectoryPicker() opens the native OS folder dialog DIRECTLY in the
-      // browser — no backend round-trip, no subprocess, instant.
-      // The trade-off: we only get handle.name (folder name, not full path).
-      // We ask the backend to resolve it via mdfind/find (~100ms).
-      const handle = await (window as any).showDirectoryPicker({ mode: 'read' })
-      const name: string = handle.name
-      const paths = await findDir(name)
-      if (paths.length === 1) {
-        setNewProjectPath(paths[0])
-      } else if (paths.length > 1) {
-        // Multiple matches — pick the shortest (most likely the root project)
-        const best = paths.reduce((a, b) => a.length <= b.length ? a : b)
-        setNewProjectPath(best)
-      } else {
-        // Not found via mdfind — let user type the full path (name pre-filled as hint)
-        setNewProjectPath(name)
-      }
-    } catch (e: unknown) {
-      // User cancelled or API error — silently ignore
-      if ((e as Error)?.name !== 'AbortError') console.error('browse:', e)
+      const result = await pickFolder()
+      if (result.path) setNewProjectPath(result.path)
+    } catch (e) {
+      console.error('browse:', e)
     }
   }
 

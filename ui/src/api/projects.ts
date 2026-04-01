@@ -74,7 +74,22 @@ export async function spawnTerminal(
   return res.json()
 }
 
-/** Given a directory name (from showDirectoryPicker handle.name), find the full absolute path. */
+/** Opens the native OS folder picker via the backend (zenity binary — no browser modal). */
+export async function pickFolder(): Promise<{ path?: string; cancelled?: boolean }> {
+  const res = await fetch('/api/filesystem/pick-folder')
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+/** Returns true if the zenity binary is available on the backend. */
+export async function canPickFolder(): Promise<boolean> {
+  const res = await fetch('/api/filesystem/pick-folder?check=1')
+  if (!res.ok) return false
+  const data = await res.json()
+  return data.supported === true
+}
+
+/** Given a directory name, find the full absolute path via Spotlight/find. */
 export async function findDir(name: string): Promise<string[]> {
   const res = await fetch(`/api/filesystem/find-dir?name=${encodeURIComponent(name)}`)
   if (!res.ok) return []
