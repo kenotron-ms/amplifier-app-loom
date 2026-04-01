@@ -9,39 +9,48 @@ import (
 	"time"
 
 	creackpty "github.com/creack/pty"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
 // Process wraps a running PTY process.
 type Process struct {
-	ID  string
-	ptm *os.File  // PTY master fd
+	ID  string     // stable UUID — safe to use in URLs
+	Key string     // deduplication key (projectID::worktreePath)
+	ptm *os.File   // PTY master fd
 	cmd *exec.Cmd
 }
 
-// Manager holds all active PTY processes keyed by a stable string ID.
-// Processes survive tab switches — they are only removed when killed or
-// when the underlying process exits naturally.
+// Manager holds active PTY processes indexed by two keys:
+//   procs: UUID id → *Process   (for WebSocket lookup by processId)
+//   keys:  key    → UUID id     (for deduplication: same worktree = same process)
 type Manager struct {
 	mu    sync.Mutex
-	procs map[string]*Process // key → process (key is also the process ID)
+	procs map[string]*Process // UUID id → process
+	keys  map[string]string   // key → UUID id
 }
 
 // NewManager returns an initialised Manager.
 func NewManager() *Manager {
-	return &Manager{procs: make(map[string]*Process)}
+	return &Manager{
+		procs: make(map[string]*Process),
+		keys:  make(map[string]string),
+	}
 }
 
 // Spawn starts a PTY process for key in workDir running argv.
-// If a live process already exists for this key, its ID is returned
-// unchanged (deduplication — same terminal survives tab switches).
+// Returns a clean UUID processId safe for use in URLs.
+// If a live process already exists for this key, its ID is returned (deduplication).
 func (m *Manager) Spawn(key, workDir string, argv []string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.procs[key]; ok {
-		// process is still alive (reaper removes it from the map on exit)
-		return key, nil
+	// Return existing live process for this key.
+	if id, ok := m.keys[key]; ok {
+		if _, alive := m.procs[id]; alive {
+			return id, nil
+		}
+		delete(m.keys, key)
 	}
 
 	cmd := exec.Command(argv[0], argv[1:]...)
@@ -53,21 +62,24 @@ func (m *Manager) Spawn(key, workDir string, argv []string) (string, error) {
 		return "", fmt.Errorf("pty start: %w", err)
 	}
 
-	proc := &Process{ID: key, ptm: ptm, cmd: cmd}
-	m.procs[key] = proc
+	id := uuid.New().String() // UUID — no slashes, safe in URL paths
+	proc := &Process{ID: id, Key: key, ptm: ptm, cmd: cmd}
+	m.procs[id] = proc
+	m.keys[key] = id
 
-	// reap when process exits naturally
+	// Reap when process exits naturally.
 	go func() {
 		cmd.Wait() //nolint:errcheck
 		m.mu.Lock()
-		delete(m.procs, key)
+		delete(m.procs, id)
+		delete(m.keys, key)
 		m.mu.Unlock()
 	}()
 
-	return key, nil
+	return id, nil
 }
 
-// IsAlive reports whether a process with the given ID is running.
+// IsAlive reports whether a process with the given UUID id is running.
 func (m *Manager) IsAlive(id string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -75,7 +87,7 @@ func (m *Manager) IsAlive(id string) bool {
 	return ok
 }
 
-// Kill terminates the process and removes it from the registry.
+// Kill terminates the process and removes it from both maps.
 func (m *Manager) Kill(id string) error {
 	m.mu.Lock()
 	p, ok := m.procs[id]
@@ -84,6 +96,7 @@ func (m *Manager) Kill(id string) error {
 		return fmt.Errorf("process %s not found", id)
 	}
 	delete(m.procs, id)
+	delete(m.keys, p.Key)
 	m.mu.Unlock()
 
 	if p.cmd.Process != nil {
@@ -99,7 +112,7 @@ var upgrader = websocket.Upgrader{
 }
 
 // ServeWS upgrades the HTTP connection to WebSocket and bidirectionally
-// bridges it to the PTY identified by processID. Blocks until closed.
+// bridges it to the PTY identified by processID (UUID). Blocks until closed.
 func (m *Manager) ServeWS(w http.ResponseWriter, r *http.Request, processID string) {
 	m.mu.Lock()
 	p, ok := m.procs[processID]
