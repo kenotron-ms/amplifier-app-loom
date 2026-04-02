@@ -1,0 +1,2252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Loom — AI-Native Job Scheduler</title>
+<style>
+/* ══════════════════════════════════════════════════════════════
+   DESIGN TOKENS — GitHub Dark Aesthetic
+══════════════════════════════════════════════════════════════ */
+:root {
+  --bg:           #0d1117;
+  --surface:      #161b22;
+  --surface-2:    #21262d;
+  --surface-3:    #2d333b;
+  --border:       #30363d;
+  --border-muted: #21262d;
+  --text-1:       #f0f6fc;
+  --text-2:       #c9d1d9;
+  --text-3:       #8b949e;
+  --text-4:       #484f58;
+
+  --blue:         #58a6ff;
+  --blue-dim:     #1f6feb;
+  --blue-bg:      rgba(88, 166, 255, 0.08);
+  --blue-border:  rgba(88, 166, 255, 0.3);
+  --green:        #3fb950;
+  --green-dim:    #238636;
+  --green-bg:     rgba(63, 185, 80, 0.08);
+  --green-border: rgba(63, 185, 80, 0.3);
+  --amber:        #e3b341;
+  --amber-bg:     rgba(227, 179, 65, 0.08);
+  --amber-border: rgba(227, 179, 65, 0.3);
+  --red:          #f85149;
+  --red-bg:       rgba(248, 81, 73, 0.08);
+  --purple:       #d2a8ff;
+  --purple-bg:    rgba(210, 168, 255, 0.08);
+  --teal:         #39d0d8;
+  --teal-bg:      rgba(57, 208, 216, 0.08);
+
+  /* Code syntax */
+  --syn-kw:   #ff7b72;
+  --syn-str:  #a5d6ff;
+  --syn-cmt:  #8b949e;
+  --syn-fn:   #d2a8ff;
+  --syn-val:  #79c0ff;
+  --syn-num:  #f2cc60;
+  --syn-op:   #ff7b72;
+  --syn-prop: #7ee787;
+  --syn-type: #ffa657;
+
+  /* 8px grid */
+  --s1: 8px; --s2: 16px; --s3: 24px; --s4: 32px;
+  --s5: 40px; --s6: 48px; --s8: 64px; --s10: 80px;
+
+  --font: -apple-system, 'Segoe UI', system-ui, Roboto, Helvetica, Arial, sans-serif;
+  --mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', Menlo, 'Courier New', monospace;
+  --radius: 6px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESET
+══════════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DECK CHROME
+══════════════════════════════════════════════════════════════ */
+#deck-progress {
+  position: fixed; top: 0; left: 0; height: 2px; z-index: 300;
+  background: linear-gradient(90deg, var(--blue), var(--teal), var(--green));
+  transition: width 0.35s ease;
+  width: 0%;
+}
+
+#slide-counter {
+  position: fixed; bottom: var(--s3); right: var(--s4); z-index: 300;
+  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em;
+  color: var(--text-4); font-variant-numeric: tabular-nums;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE BASE
+══════════════════════════════════════════════════════════════ */
+.slide {
+  position: absolute; inset: 0;
+  display: none;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
+.slide.active { display: flex; }
+
+/* ══════════════════════════════════════════════════════════════
+   SHARED COMPONENTS
+══════════════════════════════════════════════════════════════ */
+.eyebrow {
+  font-size: clamp(9px, 0.8vw, 11px);
+  font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--blue);
+}
+.slide-title {
+  font-size: clamp(18px, 2vw, 26px);
+  font-weight: 700; line-height: 1.3;
+  color: var(--text-1);
+}
+.slide-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: clamp(14px, 2.2vh, 24px) clamp(32px, 5vw, 72px);
+  flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 5px;
+}
+
+/* Code block */
+.code-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: clamp(11px, 1vw, 13px);
+  line-height: 1.6;
+}
+.code-bar {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  padding: 7px 14px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--text-3);
+}
+.code-bar .dot {
+  width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+}
+.code-bar .fname { margin-left: 4px; }
+.code-body { padding: 14px 16px; white-space: pre; overflow-x: auto; }
+
+/* Syntax tokens */
+.kw  { color: var(--syn-kw); }
+.str { color: var(--syn-str); }
+.cmt { color: var(--syn-cmt); font-style: italic; }
+.fn  { color: var(--syn-fn); }
+.val { color: var(--syn-val); }
+.num { color: var(--syn-num); }
+.prop{ color: var(--syn-prop); }
+.typ { color: var(--syn-type); }
+.pun { color: var(--text-3); }
+
+/* Badge pills */
+.badge {
+  display: inline-flex; align-items: center;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; padding: 3px 10px;
+  border-radius: 999px; white-space: nowrap;
+}
+.badge-blue   { background: var(--blue-bg);   color: var(--blue);   border: 1px solid var(--blue-border); }
+.badge-green  { background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green-border); }
+.badge-amber  { background: var(--amber-bg);  color: var(--amber);  border: 1px solid var(--amber-border); }
+.badge-purple { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(210,168,255,0.3); }
+.badge-teal   { background: var(--teal-bg);   color: var(--teal);   border: 1px solid rgba(57,208,216,0.3); }
+.badge-red    { background: var(--red-bg);    color: var(--red);    border: 1px solid rgba(248,81,73,0.3); }
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE 1 — TITLE (Light)
+══════════════════════════════════════════════════════════════ */
+.slide--title {
+  align-items: center; justify-content: center;
+  background: var(--bg);
+  position: relative;
+}
+
+.title-bg-threads {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+  opacity: 0.18;
+}
+
+.title-center {
+  position: relative; z-index: 2;
+  display: flex; flex-direction: column;
+  align-items: center; text-align: center;
+  gap: var(--s3); max-width: 720px;
+  padding: var(--s6);
+}
+
+.loom-mark {
+  display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s2);
+}
+
+.loom-icon-svg { flex-shrink: 0; }
+
+.loom-wordmark {
+  font-size: clamp(4.5rem, 11vw, 9rem);
+  font-weight: 800; letter-spacing: -0.04em;
+  line-height: 1; color: var(--text-1);
+}
+
+.title-rule {
+  width: 56px; height: 2px;
+  background: linear-gradient(90deg, var(--blue), var(--green));
+  border-radius: 2px;
+}
+
+.title-tagline {
+  font-size: clamp(1rem, 1.8vw, 1.4rem);
+  font-weight: 500; color: var(--text-2);
+  line-height: 1.5; max-width: 580px;
+}
+
+.title-oneliner {
+  font-size: clamp(0.82rem, 1.1vw, 1rem);
+  color: var(--text-3); font-weight: 400;
+  font-family: var(--mono); letter-spacing: 0.02em;
+}
+
+.title-version {
+  display: flex; gap: var(--s2); flex-wrap: wrap; justify-content: center;
+}
+
+/* Title entrance animations */
+.loom-mark          { opacity: 0; }
+.title-rule         { opacity: 0; }
+.title-tagline      { opacity: 0; }
+.title-oneliner     { opacity: 0; }
+.title-version      { opacity: 0; }
+
+.slide--title.active .loom-mark     { animation: fadeUp 0.55s ease-out 0.15s forwards; }
+.slide--title.active .title-rule    { animation: fadeIn 0.4s ease-out 0.55s forwards; }
+.slide--title.active .title-tagline { animation: fadeUp 0.5s ease-out 0.65s forwards; }
+.slide--title.active .title-oneliner{ animation: fadeUp 0.5s ease-out 0.85s forwards; }
+.slide--title.active .title-version { animation: fadeUp 0.5s ease-out 1.05s forwards; }
+
+/* Thread SVG animation */
+.thread-path {
+  stroke-dasharray: 800;
+  stroke-dashoffset: 800;
+}
+.slide--title.active .thread-path { animation: drawThread 2.5s ease-out 0.3s forwards; }
+.slide--title.active .thread-path:nth-child(2) { animation-delay: 0.5s; }
+.slide--title.active .thread-path:nth-child(3) { animation-delay: 0.7s; }
+.slide--title.active .thread-path:nth-child(4) { animation-delay: 0.9s; }
+.slide--title.active .thread-path:nth-child(5) { animation-delay: 1.1s; }
+.slide--title.active .thread-path:nth-child(6) { animation-delay: 1.3s; }
+
+@keyframes drawThread { to { stroke-dashoffset: 0; } }
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE 2 — THE PROBLEM (Medium)
+══════════════════════════════════════════════════════════════ */
+.slide--problem .slide-body {
+  flex: 1; display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0; min-height: 0;
+  padding: clamp(20px, 3.5vh, 48px) clamp(32px, 5vw, 72px);
+  align-items: center;
+}
+
+.problem-col {
+  display: flex; flex-direction: column; gap: var(--s3);
+  padding: var(--s4);
+}
+
+.problem-label {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.problem-col.old .problem-label { color: var(--text-3); }
+.problem-col.new .problem-label { color: var(--green); }
+
+.problem-heading {
+  font-size: clamp(1.1rem, 1.8vw, 1.5rem);
+  font-weight: 700; line-height: 1.3;
+}
+
+.problem-col.old .problem-heading { color: var(--text-2); }
+.problem-col.new .problem-heading { color: var(--text-1); }
+
+.problem-items { display: flex; flex-direction: column; gap: var(--s2); }
+
+.problem-item {
+  display: flex; gap: var(--s2); align-items: flex-start;
+  font-size: clamp(0.82rem, 1.1vw, 0.96rem);
+  line-height: 1.5;
+}
+.problem-col.old .problem-item { color: var(--text-3); }
+.problem-col.new .problem-item { color: var(--text-2); }
+
+.problem-item .pip {
+  width: 6px; height: 6px; border-radius: 50%;
+  flex-shrink: 0; margin-top: 7px;
+}
+.problem-col.old .pip { background: var(--text-4); }
+.problem-col.new .pip { background: var(--green); }
+
+.problem-divider {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: var(--s3);
+  padding: 0 var(--s4);
+}
+
+.divider-line-v {
+  width: 1px; height: 120px;
+  background: linear-gradient(to bottom, transparent, var(--border), transparent);
+}
+
+.gap-pill {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: var(--s2) var(--s3);
+  text-align: center;
+}
+.gap-pill .gap-label {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--amber); display: block;
+  margin-bottom: 4px;
+}
+.gap-pill .gap-text {
+  font-size: clamp(0.78rem, 1vw, 0.88rem);
+  color: var(--text-3); max-width: 140px; line-height: 1.4;
+}
+
+/* Problem entrance */
+.problem-col.old  { opacity: 0; }
+.problem-divider  { opacity: 0; }
+.problem-col.new  { opacity: 0; }
+.slide--problem.active .problem-col.old  { animation: fadeUp 0.5s ease-out 0.2s forwards; }
+.slide--problem.active .problem-divider  { animation: fadeIn 0.4s ease-out 0.5s forwards; }
+.slide--problem.active .problem-col.new  { animation: fadeUp 0.5s ease-out 0.7s forwards; }
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE 3 — THE NAME (Light)
+══════════════════════════════════════════════════════════════ */
+.slide--name {
+  align-items: center; justify-content: center;
+}
+
+.name-body {
+  display: flex; flex-direction: column;
+  align-items: center; text-align: center;
+  gap: var(--s6); max-width: 780px;
+  padding: var(--s6);
+}
+
+.name-icon-wrap {
+  position: relative;
+  width: 100px; height: 80px;
+}
+
+.weave-svg { width: 100%; height: 100%; }
+
+.name-title {
+  font-size: clamp(3rem, 7vw, 6rem);
+  font-weight: 800; letter-spacing: -0.04em;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--blue) 0%, var(--teal) 50%, var(--green) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.name-etymology {
+  font-size: clamp(0.9rem, 1.4vw, 1.1rem);
+  color: var(--text-2); line-height: 1.7; max-width: 560px;
+}
+
+.name-threads-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--s3); width: 100%; max-width: 620px;
+}
+
+.name-thread {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: var(--s3);
+  display: flex; flex-direction: column; gap: var(--s1); align-items: center;
+}
+
+.thread-label {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.thread-name {
+  font-size: clamp(0.78rem, 1.05vw, 0.92rem);
+  color: var(--text-2); font-weight: 500;
+}
+
+/* Weave entrance */
+.name-icon-wrap { opacity: 0; }
+.name-title     { opacity: 0; }
+.name-etymology { opacity: 0; }
+.name-threads-grid { opacity: 0; }
+
+.slide--name.active .name-icon-wrap     { animation: fadeUp 0.5s ease-out 0.1s forwards; }
+.slide--name.active .name-title         { animation: fadeUp 0.55s ease-out 0.25s forwards; }
+.slide--name.active .name-etymology     { animation: fadeUp 0.5s ease-out 0.5s forwards; }
+.slide--name.active .name-threads-grid  { animation: fadeUp 0.5s ease-out 0.75s forwards; }
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE 4 — EXECUTORS (Medium)
+══════════════════════════════════════════════════════════════ */
+.exec-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--s4); padding: clamp(20px, 3vh, 40px) clamp(32px, 5vw, 72px);
+  flex: 1; align-items: start;
+}
+
+.exec-card {
+  display: flex; flex-direction: column; gap: var(--s3);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  border-top: 3px solid transparent;
+  opacity: 0;
+}
+.exec-card.card-shell   { border-top-color: var(--text-3); }
+.exec-card.card-claude  { border-top-color: var(--purple); }
+.exec-card.card-amp     { border-top-color: var(--green); }
+
+.exec-header { padding: var(--s3) var(--s4) 0; }
+.exec-type   {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.exec-desc   { font-size: clamp(0.82rem, 1.05vw, 0.95rem); color: var(--text-3); line-height: 1.5; }
+
+.exec-card .code-block { margin: 0 var(--s3) var(--s3); }
+
+.slide--executors.active .exec-card:nth-child(1) { animation: fadeUp 0.5s ease-out 0.2s forwards; }
+.slide--executors.active .exec-card:nth-child(2) { animation: fadeUp 0.5s ease-out 0.38s forwards; }
+.slide--executors.active .exec-card:nth-child(3) { animation: fadeUp 0.5s ease-out 0.56s forwards; }
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE 5 — TRIGGERS (Heavy)
+══════════════════════════════════════════════════════════════ */
+.triggers-body {
+  flex: 1; display: flex; flex-direction: column; justify-content: center;
+  padding: clamp(16px, 2.5vh, 32px) clamp(32px, 5vw, 72px);
+  gap: var(--s3);
+}
+
+.trigger-row {
+  display: grid; grid-template-columns: 130px 1fr;
+  gap: var(--s4); align-items: center;
+  padding: var(--s2) var(--s4);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); min-height: 52px;
+  opacity: 0;
+}
+.trigger-row.highlight-row {
+  background: var(--green-bg); border-color: var(--green-border);
+}
+
+.trigger-name {
+  display: flex; align-items: center; gap: var(--s2);
+  font-family: var(--mono); font-size: clamp(12px, 1.1vw, 14px);
+  font-weight: 700;
+}
+.trigger-icon { font-size: 18px; flex-shrink: 0; }
+
+.trigger-desc {
+  font-size: clamp(0.8rem, 1.05vw, 0.94rem);
+  color: var(--text-2); line-height: 1.5;
+}
+.trigger-example {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--text-3); display: block; margin-top: 2px;
+}
+
+.trigger-superpower {
+  margin-top: var(--s3); display: flex; align-items: flex-start; gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  background: var(--green-bg); border: 1px solid var(--green-border);
+  border-radius: var(--radius); opacity: 0;
+}
+.sp-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+.sp-text  { font-size: clamp(0.82rem, 1.05vw, 0.95rem); color: var(--text-2); line-height: 1.5; }
+.sp-text strong { color: var(--green); }
+
+.slide--triggers.active .trigger-row:nth-child(1) { animation: fadeUp 0.4s ease-out 0.1s forwards; }
+.slide--triggers.active .trigger-row:nth-child(2) { animation: fadeUp 0.4s ease-out 0.2s forwards; }
+.slide--triggers.active .trigger-row:nth-child(3) { animation: fadeUp 0.4s ease-out 0.3s forwards; }
+.slide--triggers.active .trigger-row:nth-child(4) { animation: fadeUp 0.4s ease-out 0.4s forwards; }
+.slide--triggers.active .trigger-row:nth-child(5) { animation: fadeUp 0.4s ease-out 0.5s forwards; }
+.slide--triggers.active .trigger-superpower       { animation: fadeUp 0.5s ease-out 0.75s forwards; }
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE 6 — THE MIRROR (Medium)
+══════════════════════════════════════════════════════════════ */
+.mirror-body {
+  flex: 1; display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s6); padding: clamp(20px, 3.5vh, 48px) clamp(32px, 5vw, 72px);
+  align-items: start;
+}
+
+.mirror-col { display: flex; flex-direction: column; gap: var(--s4); }
+
+.mirror-section-label {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-3);
+  padding-bottom: var(--s1); border-bottom: 1px solid var(--border);
+}
+
+.entity-list { display: flex; flex-direction: column; gap: var(--s2); }
+
+.entity-item {
+  display: flex; align-items: center; gap: var(--s2);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: var(--s2) var(--s3);
+  font-family: var(--mono); font-size: clamp(11px, 1vw, 13px);
+}
+.entity-kind { color: var(--blue); }
+.entity-slash { color: var(--text-4); }
+.entity-path  { color: var(--text-2); }
+.entity-dot   { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; box-shadow: 0 0 6px var(--green); margin-left: auto; }
+
+.diff-visual {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.diff-bar {
+  background: var(--surface-2); border-bottom: 1px solid var(--border);
+  padding: 6px 12px; font-size: 11px; color: var(--text-3);
+  display: flex; gap: 12px; align-items: center;
+}
+.diff-stat { display: flex; align-items: center; gap: 4px; }
+.diff-stat.added   { color: var(--green); }
+.diff-stat.removed { color: var(--red); }
+.diff-stat.changed { color: var(--amber); }
+
+.diff-lines { padding: var(--s2); font-family: var(--mono); font-size: 12px; line-height: 1.7; }
+.diff-add  { color: var(--green); background: var(--green-bg); display: block; padding: 0 var(--s1); border-radius: 3px; margin-bottom: 2px; }
+.diff-del  { color: var(--red);   background: var(--red-bg);   display: block; padding: 0 var(--s1); border-radius: 3px; margin-bottom: 2px; }
+.diff-ctx  { color: var(--text-4); display: block; padding: 0 var(--s1); margin-bottom: 2px; }
+
+.mirror-flow { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.flow-step {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: var(--s2) var(--s3);
+  font-size: clamp(0.75rem, 1vw, 0.86rem); text-align: center; color: var(--text-2);
+}
+.flow-step-icon { font-size: 18px; }
+.flow-arrow-small { color: var(--text-4); font-size: 18px; flex-shrink: 0; }
+.flow-step.fire-step { border-color: var(--amber-border); background: var(--amber-bg); color: var(--amber); }
+
+/* Mirror entrance */
+.mirror-col:first-child  { opacity: 0; }
+.mirror-col:last-child   { opacity: 0; }
+.slide--mirror.active .mirror-col:first-child { animation: fadeUp 0.5s ease-out 0.2s forwards; }
+.slide--mirror.active .mirror-col:last-child  { animation: fadeUp 0.5s ease-out 0.4s forwards; }
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE 7 — USE CASES (Heavy)
+══════════════════════════════════════════════════════════════ */
+.usecases-body {
+  flex: 1; display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--s3); padding: clamp(16px, 2.5vh, 32px) clamp(32px, 5vw, 72px);
+  align-items: start;
+}
+
+.usecase-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  display: flex; flex-direction: column;
+  border-top: 3px solid transparent; opacity: 0;
+}
+.usecase-card.uc-teams { border-top-color: var(--blue); }
+.usecase-card.uc-amazon { border-top-color: var(--amber); }
+.usecase-card.uc-inbox  { border-top-color: var(--green); }
+
+.uc-header {
+  padding: var(--s3) var(--s4);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: var(--s2);
+}
+.uc-icon { font-size: 22px; }
+.uc-title-text { font-size: clamp(0.85rem, 1.2vw, 1rem); font-weight: 700; color: var(--text-1); }
+.uc-source { font-size: 0.75rem; color: var(--text-3); margin-top: 2px; }
+
+.uc-steps { padding: var(--s3) var(--s4); display: flex; flex-direction: column; gap: var(--s2); }
+
+.uc-step {
+  display: flex; gap: var(--s2); align-items: flex-start;
+  font-size: clamp(0.78rem, 1.05vw, 0.9rem); line-height: 1.5;
+}
+.uc-step-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+}
+.uc-teams  .uc-step-num { background: var(--blue-bg);   color: var(--blue); }
+.uc-amazon .uc-step-num { background: var(--amber-bg);  color: var(--amber); }
+.uc-inbox  .uc-step-num { background: var(--green-bg);  color: var(--green); }
+
+.uc-step-text { color: var(--text-2); }
+.uc-step-text strong { color: var(--text-1); }
+
+.uc-time {
+  margin-top: var(--s2); padding: var(--s2) var(--s3);
+  border-top: 1px solid var(--border-muted);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
+}
+.uc-teams  .uc-time { color: var(--blue); }
+.uc-amazon .uc-time { color: var(--amber); }
+.uc-inbox  .uc-time { color: var(--green); }
+
+.slide--usecases.active .usecase-card:nth-child(1) { animation: fadeUp 0.5s ease-out 0.15s forwards; }
+.slide--usecases.active .usecase-card:nth-child(2) { animation: fadeUp 0.5s ease-out 0.3s forwards; }
+.slide--usecases.active .usecase-card:nth-child(3) { animation: fadeUp 0.5s ease-out 0.45s forwards; }
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE 8 — WEB UI (Medium)
+══════════════════════════════════════════════════════════════ */
+.ui-body {
+  flex: 1; display: grid; grid-template-columns: 1fr 1.6fr;
+  gap: var(--s6); padding: clamp(20px, 3vh, 40px) clamp(32px, 5vw, 72px);
+  align-items: center;
+}
+
+.ui-features { display: flex; flex-direction: column; gap: var(--s4); opacity: 0; }
+
+.ui-feature { display: flex; flex-direction: column; gap: 4px; }
+.ui-feature-label {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-3);
+}
+.ui-feature-text { font-size: clamp(0.85rem, 1.2vw, 1rem); color: var(--text-2); line-height: 1.5; }
+.ui-feature-text strong { color: var(--text-1); }
+
+.ui-mock { opacity: 0; }
+
+.browser-frame {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
+  box-shadow: 0 16px 64px rgba(0,0,0,0.5);
+}
+
+.browser-bar {
+  background: var(--surface-2); border-bottom: 1px solid var(--border);
+  padding: 10px 16px; display: flex; align-items: center; gap: 8px;
+}
+.browser-dots { display: flex; gap: 5px; }
+.browser-dot { width: 9px; height: 9px; border-radius: 50%; }
+.b-red    { background: #f85149; }
+.b-amber  { background: var(--amber); }
+.b-green  { background: var(--green); }
+
+.browser-url {
+  flex: 1; background: var(--surface-3); border: 1px solid var(--border);
+  border-radius: 4px; padding: 3px 10px; font-family: var(--mono);
+  font-size: 11px; color: var(--text-3); text-align: center;
+}
+
+.browser-body { padding: var(--s3); }
+
+.browser-tabs {
+  display: flex; gap: 2px; margin-bottom: var(--s3);
+  border-bottom: 1px solid var(--border); padding-bottom: 0;
+}
+.browser-tab {
+  padding: 6px 14px; font-size: 12px; font-weight: 600; color: var(--text-3);
+  cursor: pointer; border-radius: 4px 4px 0 0; border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.browser-tab.active-tab { color: var(--blue); border-bottom-color: var(--blue); }
+
+.ui-ai-bar {
+  background: var(--surface-2); border: 1px solid var(--border-muted);
+  border-radius: var(--radius); padding: var(--s2) var(--s3); margin-bottom: var(--s3);
+  display: flex; align-items: center; gap: var(--s2);
+}
+.ai-bar-icon { color: var(--blue); font-size: 14px; flex-shrink: 0; }
+.ai-bar-text { font-size: 12px; color: var(--text-3); font-style: italic; flex: 1; }
+.ai-bar-send { background: var(--blue-dim); color: var(--text-1); border: none; border-radius: 4px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; }
+
+.job-rows { display: flex; flex-direction: column; gap: var(--s1); }
+.job-row  {
+  display: flex; align-items: center; gap: var(--s2); padding: 6px var(--s2);
+  background: var(--surface-3); border-radius: 4px; border: 1px solid var(--border-muted);
+}
+.job-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.job-status-dot.running  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.job-status-dot.idle     { background: var(--text-4); }
+.job-status-dot.queued   { background: var(--amber); }
+.job-name  { font-size: 11px; font-weight: 600; color: var(--text-2); flex: 1; font-family: var(--mono); }
+.job-type  { font-size: 10px; color: var(--text-4); }
+
+.sse-output {
+  background: var(--bg); border: 1px solid var(--border-muted);
+  border-radius: 4px; padding: var(--s2); font-family: var(--mono);
+  font-size: 11px; line-height: 1.6; margin-top: var(--s2);
+  color: var(--text-3);
+}
+.sse-line-green { color: var(--green); }
+.sse-line-blue  { color: var(--blue); }
+.sse-cursor { display: inline-block; width: 7px; height: 12px; background: var(--green); animation: blink 1s step-start infinite; vertical-align: text-bottom; }
+
+.slide--ui.active .ui-features { animation: fadeUp 0.5s ease-out 0.2s forwards; }
+.slide--ui.active .ui-mock      { animation: fadeUp 0.5s ease-out 0.4s forwards; }
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE 9 — INTEGRATIONS (Medium)
+══════════════════════════════════════════════════════════════ */
+.integrations-body {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: clamp(16px, 2.5vh, 32px) clamp(32px, 5vw, 72px);
+  gap: var(--s8);
+}
+
+.integrations-diagram { flex-shrink: 0; }
+
+.int-node { opacity: 0; }
+
+.int-desc { display: flex; flex-direction: column; gap: var(--s4); max-width: 380px; opacity: 0; }
+.int-item { display: flex; flex-direction: column; gap: 3px; }
+.int-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.int-text  { font-size: clamp(0.8rem, 1.05vw, 0.93rem); color: var(--text-3); line-height: 1.5; }
+
+/* Integration diagram entrance — hub first, then spokes */
+.slide--integrations.active .hub-node         { animation: nodeReveal 0.4s ease-out 0.2s forwards; }
+.slide--integrations.active .conn-line        { animation: drawLine 0.35s ease-out forwards; }
+.slide--integrations.active .conn-line:nth-child(2)  { animation-delay: 0.45s; }
+.slide--integrations.active .conn-line:nth-child(3)  { animation-delay: 0.55s; }
+.slide--integrations.active .conn-line:nth-child(4)  { animation-delay: 0.65s; }
+.slide--integrations.active .conn-line:nth-child(5)  { animation-delay: 0.75s; }
+.slide--integrations.active .conn-line:nth-child(6)  { animation-delay: 0.85s; }
+.slide--integrations.active .conn-line:nth-child(7)  { animation-delay: 0.95s; }
+
+.slide--integrations.active .spoke-amp    { animation: nodeReveal 0.4s ease-out 0.55s forwards; }
+.slide--integrations.active .spoke-claude { animation: nodeReveal 0.4s ease-out 0.65s forwards; }
+.slide--integrations.active .spoke-teams  { animation: nodeReveal 0.4s ease-out 0.75s forwards; }
+.slide--integrations.active .spoke-gh     { animation: nodeReveal 0.4s ease-out 0.85s forwards; }
+.slide--integrations.active .spoke-amz    { animation: nodeReveal 0.4s ease-out 0.95s forwards; }
+.slide--integrations.active .spoke-shell  { animation: nodeReveal 0.4s ease-out 1.05s forwards; }
+.slide--integrations.active .spoke-http   { animation: nodeReveal 0.4s ease-out 1.15s forwards; }
+
+.slide--integrations.active .int-desc { animation: fadeUp 0.5s ease-out 1.3s forwards; }
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE 10 — THE NUMBERS (Light)
+══════════════════════════════════════════════════════════════ */
+.slide--numbers {
+  align-items: center; justify-content: center;
+}
+
+.numbers-body {
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--s6); padding: var(--s6);
+  max-width: 900px; width: 100%;
+}
+
+.numbers-hero {
+  display: flex; flex-direction: column; align-items: center; gap: var(--s2);
+  text-align: center;
+}
+.numbers-big {
+  font-size: clamp(4.5rem, 12vw, 9rem);
+  font-weight: 800; letter-spacing: -0.04em; line-height: 1;
+  color: var(--text-1); font-variant-numeric: tabular-nums;
+}
+.numbers-big-label {
+  font-size: clamp(0.85rem, 1.3vw, 1.1rem);
+  color: var(--text-3); font-weight: 500;
+}
+.numbers-sub {
+  font-size: clamp(0.8rem, 1.1vw, 1rem); color: var(--amber);
+  font-weight: 600;
+}
+
+.numbers-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: var(--s3); width: 100%;
+}
+
+.num-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: var(--s3) var(--s4);
+  text-align: center; opacity: 0;
+  display: flex; flex-direction: column; gap: 4px;
+  border-top: 2px solid transparent;
+}
+.num-card:nth-child(1) { border-top-color: var(--blue); }
+.num-card:nth-child(2) { border-top-color: var(--green); }
+.num-card:nth-child(3) { border-top-color: var(--purple); }
+.num-card:nth-child(4) { border-top-color: var(--amber); }
+
+.num-value {
+  font-size: clamp(1.6rem, 3vw, 2.8rem);
+  font-weight: 800; letter-spacing: -0.02em; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.num-card:nth-child(1) .num-value { color: var(--blue); }
+.num-card:nth-child(2) .num-value { color: var(--green); }
+.num-card:nth-child(3) .num-value { color: var(--purple); }
+.num-card:nth-child(4) .num-value { color: var(--amber); }
+
+.num-desc { font-size: clamp(0.72rem, 0.95vw, 0.88rem); color: var(--text-3); }
+
+.numbers-big { opacity: 0; }
+.numbers-big-label { opacity: 0; }
+.numbers-sub  { opacity: 0; }
+
+.slide--numbers.active .numbers-big       { animation: fadeIn 0.4s ease-out 0.15s forwards; }
+.slide--numbers.active .numbers-big-label { animation: fadeIn 0.4s ease-out 0.3s forwards; }
+.slide--numbers.active .numbers-sub       { animation: fadeIn 0.4s ease-out 0.45s forwards; }
+.slide--numbers.active .num-card:nth-child(1) { animation: fadeUp 0.45s ease-out 0.6s forwards; }
+.slide--numbers.active .num-card:nth-child(2) { animation: fadeUp 0.45s ease-out 0.72s forwards; }
+.slide--numbers.active .num-card:nth-child(3) { animation: fadeUp 0.45s ease-out 0.84s forwards; }
+.slide--numbers.active .num-card:nth-child(4) { animation: fadeUp 0.45s ease-out 0.96s forwards; }
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE 11 — ARCHITECTURE (Medium)
+══════════════════════════════════════════════════════════════ */
+.arch-body {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: clamp(16px, 2.5vh, 32px) clamp(32px, 5vw, 72px);
+  gap: var(--s6);
+}
+
+.arch-diagram { flex-shrink: 0; }
+
+.arch-desc { display: flex; flex-direction: column; gap: var(--s3); max-width: 340px; opacity: 0; }
+.arch-point { display: flex; flex-direction: column; gap: 2px; }
+.arch-point-label {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-3);
+}
+.arch-point-text {
+  font-size: clamp(0.82rem, 1.05vw, 0.94rem); color: var(--text-2); line-height: 1.5;
+}
+
+.arch-box { opacity: 0; }
+.arch-conn { opacity: 0; }
+
+.slide--architecture.active .arch-box:nth-child(1)  { animation: nodeReveal 0.4s ease-out 0.1s forwards; }
+.slide--architecture.active .arch-box:nth-child(2)  { animation: nodeReveal 0.4s ease-out 0.25s forwards; }
+.slide--architecture.active .arch-box:nth-child(3)  { animation: nodeReveal 0.4s ease-out 0.4s forwards; }
+.slide--architecture.active .arch-box:nth-child(4)  { animation: nodeReveal 0.4s ease-out 0.55s forwards; }
+.slide--architecture.active .arch-box:nth-child(5)  { animation: nodeReveal 0.4s ease-out 0.7s forwards; }
+.slide--architecture.active .arch-conn              { animation: fadeIn 0.5s ease-out 0.85s forwards; }
+.slide--architecture.active .arch-desc              { animation: fadeUp 0.5s ease-out 1.0s forwards; }
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE 12 — GET STARTED (Light)
+══════════════════════════════════════════════════════════════ */
+.slide--install {
+  align-items: center; justify-content: center;
+}
+
+.install-body {
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--s6); padding: var(--s6); max-width: 820px; text-align: center;
+}
+
+.install-eyebrow { opacity: 0; }
+.install-title   { font-size: clamp(1.8rem, 3.5vw, 3rem); font-weight: 800; color: var(--text-1); line-height: 1.2; opacity: 0; }
+.install-cmd     { opacity: 0; width: 100%; }
+.install-paths   { opacity: 0; }
+
+.install-command {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; width: 100%;
+}
+.install-cmd-bar {
+  background: var(--surface-2); border-bottom: 1px solid var(--border);
+  padding: 8px 14px; display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--text-3);
+}
+.install-cmd-bar .term-dots { display: flex; gap: 5px; }
+.install-cmd-code {
+  padding: var(--s4) var(--s4); font-family: var(--mono);
+  font-size: clamp(0.8rem, 1.3vw, 1.05rem); line-height: 1.7; text-align: left;
+  overflow-x: auto;
+}
+
+.install-or { color: var(--text-3); font-size: 0.9rem; }
+
+.install-paths-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: var(--s3); width: 100%;
+}
+
+.install-path {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: var(--s3) var(--s4);
+  display: flex; flex-direction: column; gap: 6px; text-align: left;
+}
+.install-path-label {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.install-path-label.web   { color: var(--blue); }
+.install-path-label.amp   { color: var(--green); }
+.install-path-text {
+  font-family: var(--mono); font-size: clamp(11px, 0.95vw, 13px);
+  color: var(--text-2); line-height: 1.5;
+}
+
+.slide--install.active .install-eyebrow { animation: fadeUp 0.4s ease-out 0.1s forwards; }
+.slide--install.active .install-title   { animation: fadeUp 0.5s ease-out 0.2s forwards; }
+.slide--install.active .install-cmd     { animation: fadeUp 0.5s ease-out 0.38s forwards; }
+.slide--install.active .install-or      { animation: fadeIn 0.4s ease-out 0.65s forwards; }
+.slide--install.active .install-paths   { animation: fadeUp 0.5s ease-out 0.75s forwards; }
+
+.install-or { opacity: 0; }
+
+/* ══════════════════════════════════════════════════════════════
+   SLIDE 13 — CLOSING QUOTE (Light / Dramatic)
+══════════════════════════════════════════════════════════════ */
+.slide--quote {
+  align-items: center; justify-content: center;
+  background: var(--bg);
+  position: relative; overflow: hidden;
+}
+
+.quote-glow {
+  position: absolute;
+  width: 600px; height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(88,166,255,0.06) 0%, transparent 70%);
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.quote-body {
+  position: relative; z-index: 2;
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; gap: var(--s6); padding: var(--s8);
+  max-width: 900px;
+}
+
+.quote-mark {
+  font-size: clamp(4rem, 10vw, 8rem); line-height: 0.6;
+  color: var(--blue); font-family: Georgia, serif; opacity: 0.2;
+}
+
+.quote-text {
+  font-size: clamp(1.1rem, 2.2vw, 1.85rem);
+  font-weight: 500; line-height: 1.55; color: var(--text-1);
+  letter-spacing: -0.01em; font-style: italic;
+}
+
+.quote-text em { font-style: normal; color: var(--blue); font-weight: 700; }
+.quote-text strong { font-style: normal; color: var(--green); }
+
+.quote-rule {
+  width: 48px; height: 2px;
+  background: linear-gradient(90deg, var(--blue), var(--green));
+  border-radius: 2px;
+}
+
+.quote-author { color: var(--text-4); font-size: 0.85rem; font-weight: 500; }
+
+.quote-cta {
+  margin-top: var(--s2);
+  font-size: clamp(1.1rem, 2vw, 1.6rem);
+  font-weight: 700; color: var(--text-2);
+  letter-spacing: -0.01em;
+}
+.quote-cta .cta-accent { color: var(--green); }
+
+.quote-mark     { opacity: 0; }
+.quote-text     { opacity: 0; }
+.quote-rule     { opacity: 0; }
+.quote-author       { opacity: 0; }
+.quote-cta          { opacity: 0; }
+.closing-badges-wrap {
+  display: flex; gap: var(--s3);
+  flex-wrap: wrap; justify-content: center;
+  opacity: 0;
+}
+
+.slide--quote.active .quote-mark   { animation: fadeIn 0.6s ease-out 0.1s forwards; }
+.slide--quote.active .quote-text   { animation: fadeUp 0.7s ease-out 0.3s forwards; }
+.slide--quote.active .quote-rule   { animation: fadeIn 0.4s ease-out 0.9s forwards; }
+.slide--quote.active .quote-author { animation: fadeIn 0.4s ease-out 1.0s forwards; }
+.slide--quote.active .quote-cta    { animation: fadeUp 0.6s ease-out 1.2s forwards; }
+
+/* ══════════════════════════════════════════════════════════════
+   KEYFRAMES
+══════════════════════════════════════════════════════════════ */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes nodeReveal {
+  from { opacity: 0; transform: scale(0.78); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes drawLine {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   REDUCED MOTION
+══════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay:    0s !important;
+    transition-duration: 0.01ms !important;
+  }
+  .loom-mark, .title-rule, .title-tagline, .title-oneliner, .title-version,
+  .problem-col.old, .problem-divider, .problem-col.new,
+  .name-icon-wrap, .name-title, .name-etymology, .name-threads-grid,
+  .exec-card, .trigger-row, .trigger-superpower,
+  .mirror-col, .usecase-card, .ui-features, .ui-mock,
+  .int-node, .int-desc, .arch-box, .arch-conn, .arch-desc,
+  .install-eyebrow, .install-title, .install-cmd, .install-or, .install-paths,
+  .quote-mark, .quote-text, .quote-rule, .quote-author, .quote-cta,
+  .numbers-big, .numbers-big-label, .numbers-sub, .num-card {
+    opacity: 1 !important; transform: none !important;
+  }
+  .thread-path { stroke-dashoffset: 0 !important; }
+  .conn-line   { stroke-dashoffset: 0 !important; }
+  .sse-cursor  { animation: none !important; }
+  #deck-progress { transition: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SPEAKER NOTES
+══════════════════════════════════════════════════════════════ */
+.speaker-notes {
+  display: none;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 500;
+  background: rgba(8, 12, 20, 0.97);
+  border-top: 2px solid var(--blue-dim);
+  padding: clamp(12px, 2vh, 18px) clamp(24px, 4vw, 56px);
+  max-height: 40vh; overflow-y: auto;
+  font-size: clamp(0.78rem, 1.1vw, 0.96rem);
+  line-height: 1.7; color: #c9d1d9;
+}
+.speaker-notes p { margin-bottom: 5px; }
+.speaker-notes strong { color: var(--blue); }
+
+/* ══════════════════════════════════════════════════════════════
+   PRINT SUPPORT
+══════════════════════════════════════════════════════════════ */
+@media print {
+  .slide { position: relative; display: flex !important; page-break-after: always; break-after: page; height: 100vh; }
+  #deck-progress, #slide-counter { display: none; }
+  .speaker-notes { display: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Deck Chrome ─────────────────────────────────────────── -->
+<div id="deck-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div>
+<div id="slide-counter" aria-live="polite"></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SLIDE 1 — TITLE (Light)
+══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--title" aria-label="Title">
+
+  <!-- Background thread animation -->
+  <div class="title-bg-threads" aria-hidden="true">
+    <svg width="100%" height="100%" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <!-- Blue warp threads -->
+      <path class="thread-path" d="M-50,180 C200,120 400,280 700,200 C1000,120 1200,300 1490,220" stroke="#58a6ff" stroke-width="1.5" fill="none"/>
+      <path class="thread-path" d="M-50,350 C150,300 500,420 750,360 C1000,300 1300,450 1490,390" stroke="#58a6ff" stroke-width="1" fill="none"/>
+      <path class="thread-path" d="M-50,520 C250,460 550,580 800,520 C1050,460 1250,600 1490,540" stroke="#58a6ff" stroke-width="1.5" fill="none"/>
+      <!-- Green weft threads -->
+      <path class="thread-path" d="M-50,260 C300,200 600,340 900,280 C1150,220 1350,360 1490,300" stroke="#3fb950" stroke-width="1" fill="none"/>
+      <path class="thread-path" d="M-50,440 C200,380 550,500 850,440 C1100,380 1300,520 1490,460" stroke="#3fb950" stroke-width="1.5" fill="none"/>
+      <path class="thread-path" d="M-50,620 C350,560 650,680 950,620 C1200,560 1350,700 1490,640" stroke="#3fb950" stroke-width="1" fill="none"/>
+      <!-- Teal cross-threads -->
+      <path class="thread-path" d="M300,-50 C240,200 380,450 280,700 C220,850 300,920 280,950" stroke="#39d0d8" stroke-width="1" fill="none"/>
+      <path class="thread-path" d="M800,-50 C750,180 880,420 780,680 C720,840 800,910 780,950" stroke="#39d0d8" stroke-width="1" fill="none"/>
+      <path class="thread-path" d="M1200,-50 C1150,180 1280,420 1180,680 C1120,840 1200,910 1180,950" stroke="#39d0d8" stroke-width="0.8" fill="none"/>
+    </svg>
+  </div>
+
+  <div class="title-center">
+    <div class="loom-mark">
+      <!-- Loom woven icon -->
+      <svg class="loom-icon-svg" width="72" height="60" viewBox="0 0 72 60" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4,30 C16,10 28,50 36,30 C44,10 56,50 68,30" stroke="#58a6ff" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M4,30 C16,50 28,10 36,30 C44,50 56,10 68,30" stroke="#3fb950" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M36,4 C20,14 10,26 16,36 C22,46 36,52 50,46 C60,40 66,28 58,18 C52,10 44,4 36,4" stroke="#39d0d8" stroke-width="1.5" fill="none" opacity="0.5"/>
+      </svg>
+      <div class="loom-wordmark">Loom</div>
+    </div>
+
+    <div class="title-rule" aria-hidden="true"></div>
+
+    <p class="title-tagline">
+      Weaving AI tools, shell commands, and data streams<br>into automated workflows
+    </p>
+
+    <p class="title-oneliner">
+      A single Go binary. Runs in the background. Changes everything about how you automate.
+    </p>
+
+    <div class="title-version">
+      <span class="badge badge-blue">v0.7.1</span>
+      <span class="badge badge-green">Go · React · bbolt</span>
+      <span class="badge badge-teal">5 Platforms</span>
+      <span class="badge badge-amber">AI-Native</span>
+    </div>
+  </div>
+
+  <div class="speaker-notes">
+    <p><strong>Key point:</strong> Loom is the scheduler cron should have been if cron had been built in 2025 instead of 1975. The name is literal — it weaves AI tools, shell commands, and live data streams into automated workflows, just as a loom weaves threads into fabric. One binary, zero dependencies, runs silently in the background.</p>
+    <p><strong>If challenged:</strong> "Why not just use cron/launchd/Task Scheduler?" Those tools have no concept of AI sessions, no live output, no change detection, no UI. They were built for "run a script at a time." Loom was built for "run an AI agent when the world changes." Fundamentally different problem.</p>
+    <p><strong>Transition:</strong> To understand why Loom exists, let's start with the gap it fills — what the old world of schedulers can and can't do.</p>
+    <p><strong>Confidence:</strong> High — first-hand, v0.7.1, ~2.5 weeks of development.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SLIDE 2 — THE PROBLEM (Medium)
+══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--problem" aria-label="The Problem">
+  <header class="slide-header">
+    <p class="eyebrow">The Problem</p>
+    <h2 class="slide-title">Cron was built for shell commands — it has no concept of AI sessions or change detection</h2>
+  </header>
+
+  <div class="slide-body">
+    <div class="problem-col old">
+      <div class="problem-label">The Old World — cron / launchd / Task Scheduler</div>
+      <div class="problem-heading">Works great for shell<br>commands on a schedule.</div>
+      <div class="problem-items">
+        <div class="problem-item">
+          <span class="pip"></span>
+          <span>Run Claude on a schedule? Edit crontab, write a shell wrapper, pray it runs. No output visible.</span>
+        </div>
+        <div class="problem-item">
+          <span class="pip"></span>
+          <span>React to a GitHub PR comment? Write a webhook server, deploy it somewhere, keep it running.</span>
+        </div>
+        <div class="problem-item">
+          <span class="pip"></span>
+          <span>Watch an Amazon price? Write a Python scraper, schedule it, parse HTML manually.</span>
+        </div>
+        <div class="problem-item">
+          <span class="pip"></span>
+          <span>No live output. No history. No UI. No pause/resume. No queue depth.</span>
+        </div>
+        <div class="problem-item">
+          <span class="pip"></span>
+          <span>Fires on every poll — even when <em>nothing has changed</em>.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="problem-divider" aria-hidden="true">
+      <div class="divider-line-v"></div>
+      <div class="gap-pill">
+        <span class="gap-label">The Gap</span>
+        <span class="gap-text">No tool bridges AI sessions and change detection</span>
+      </div>
+      <div class="divider-line-v"></div>
+    </div>
+
+    <div class="problem-col new">
+      <div class="problem-label">The New Reality — what automation should look like</div>
+      <div class="problem-heading">Your most powerful<br>"commands" are now AI sessions.</div>
+      <div class="problem-items">
+        <div class="problem-item">
+          <span class="pip"></span>
+          <span>Describe a job in plain English → it gets created and scheduled.</span>
+        </div>
+        <div class="problem-item">
+          <span class="pip"></span>
+          <span>Fire an AI agent only when something in an external service actually changes.</span>
+        </div>
+        <div class="problem-item">
+          <span class="pip"></span>
+          <span>Watch streaming output live in the browser as Claude works.</span>
+        </div>
+        <div class="problem-item">
+          <span class="pip"></span>
+          <span>Full execution history, pause/resume, queue depth — all in one tab.</span>
+        </div>
+        <div class="problem-item">
+          <span class="pip"></span>
+          <span>Chain AI sessions, pass outputs to next jobs, build real workflows.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="speaker-notes">
+    <p><strong>Key point:</strong> The gap isn't a missing feature in cron — it's a conceptual mismatch. Cron's mental model is "run a command at a fixed time." The world has moved to "run an AI agent when something changes." Those are fundamentally different problems requiring fundamentally different architecture.</p>
+    <p><strong>If challenged:</strong> "Can't you wrap Claude in a shell script and cron it?" Yes, and you'll lose streaming output, change detection, session management, and UI. You also can't watch for external changes without writing polling logic. Loom is the runtime, not the wrapper.</p>
+    <p><strong>Transition:</strong> Before we look at the solution, let's talk about why this project is called Loom — it's more than just a name.</p>
+    <p><strong>Confidence:</strong> High — analysis from direct experience building automation workflows before and after Loom.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SLIDE 3 — THE NAME (Light)
+══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--name" aria-label="The Name">
+  <div class="name-body">
+    <div class="name-icon-wrap" aria-hidden="true">
+      <svg class="weave-svg" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+        <path d="M5,40 C20,10 35,70 50,40 C65,10 80,70 95,40" stroke="#58a6ff" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+        <path d="M5,40 C20,70 35,10 50,40 C65,70 80,10 95,40" stroke="#3fb950" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+        <circle cx="50" cy="40" r="5" fill="#39d0d8"/>
+        <circle cx="18" cy="24" r="3" fill="#58a6ff" opacity="0.6"/>
+        <circle cx="18" cy="56" r="3" fill="#3fb950" opacity="0.6"/>
+        <circle cx="82" cy="24" r="3" fill="#58a6ff" opacity="0.6"/>
+        <circle cx="82" cy="56" r="3" fill="#3fb950" opacity="0.6"/>
+      </svg>
+    </div>
+
+    <h1 class="name-title">Loom</h1>
+
+    <p class="name-etymology">
+      A loom weaves threads of different materials — warp and weft — into a single unified fabric.<br>
+      <strong style="color:var(--text-1);">Loom the scheduler</strong> weaves AI sessions, shell commands, and live data streams into automated workflows.
+    </p>
+
+    <div class="name-threads-grid">
+      <div class="name-thread">
+        <span class="thread-label" style="color:var(--blue);">Thread 1</span>
+        <span class="thread-name">AI Sessions<br>(Claude, Amplifier)</span>
+      </div>
+      <div class="name-thread">
+        <span class="thread-label" style="color:var(--green);">Thread 2</span>
+        <span class="thread-name">Shell Commands<br>& Scripts</span>
+      </div>
+      <div class="name-thread">
+        <span class="thread-label" style="color:var(--teal);">Thread 3</span>
+        <span class="thread-name">External Data<br>Streams & Events</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SLIDE 4 — EXECUTORS (Medium)
+══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--executors" aria-label="Three Executor Types">
+  <header class="slide-header">
+    <p class="eyebrow">Executors</p>
+    <h2 class="slide-title">Three executor types let Loom run anything — from shell scripts to full AI sessions</h2>
+  </header>
+
+  <div class="exec-grid">
+
+    <!-- Shell -->
+    <div class="exec-card card-shell">
+      <div class="exec-header">
+        <div class="exec-type" style="color:var(--text-3);">shell</div>
+        <p class="exec-desc">Any shell command or script. The classic — now with live streaming output, history, and scheduling superpowers.</p>
+      </div>
+      <div class="code-block">
+        <div class="code-bar">
+          <span class="dot" style="background:#f85149"></span>
+          <span class="dot" style="background:#e3b341"></span>
+          <span class="dot" style="background:#3fb950"></span>
+          <span class="fname">daily-backup.yaml</span>
+        </div>
+        <div class="code-body"><span class="prop">id</span><span class="pun">: </span><span class="str">daily-backup</span>
+<span class="prop">trigger</span><span class="pun">:</span>
+  <span class="prop">type</span><span class="pun">: </span><span class="kw">cron</span>
+  <span class="prop">schedule</span><span class="pun">: </span><span class="str">"0 2 * * *"</span>
+<span class="prop">executor</span><span class="pun">:</span>
+  <span class="prop">type</span><span class="pun">: </span><span class="kw">shell</span>
+  <span class="prop">command</span><span class="pun">: </span><span class="str">rsync -av ~/projects/</span>
+            <span class="str">         /backup/</span></div>
+      </div>
+    </div>
+
+    <!-- Claude Code -->
+    <div class="exec-card card-claude">
+      <div class="exec-header">
+        <div class="exec-type" style="color:var(--purple);">claude-code</div>
+        <p class="exec-desc">Claude AI sessions as first-class jobs. Model selection, chaining, multi-step reasoning — all schedulable.</p>
+      </div>
+      <div class="code-block">
+        <div class="code-bar">
+          <span class="dot" style="background:#f85149"></span>
+          <span class="dot" style="background:#e3b341"></span>
+          <span class="dot" style="background:#3fb950"></span>
+          <span class="fname">pr-review.yaml</span>
+        </div>
+        <div class="code-body"><span class="prop">id</span><span class="pun">: </span><span class="str">review-pr</span>
+<span class="prop">trigger</span><span class="pun">:</span>
+  <span class="prop">type</span><span class="pun">: </span><span class="kw">connector</span>
+  <span class="prop">entity</span><span class="pun">: </span><span class="str">github.pr/myorg/repo</span>
+<span class="prop">executor</span><span class="pun">:</span>
+  <span class="prop">type</span><span class="pun">: </span><span class="kw">claude-code</span>
+  <span class="prop">model</span><span class="pun">: </span><span class="str">claude-opus-4-5</span>
+  <span class="prop">prompt</span><span class="pun">: </span><span class="str">|
+    Review this PR for quality,
+    security, and test coverage.</span></div>
+      </div>
+    </div>
+
+    <!-- Amplifier -->
+    <div class="exec-card card-amp">
+      <div class="exec-header">
+        <div class="exec-type" style="color:var(--green);">amplifier</div>
+        <p class="exec-desc">Full Amplifier AI sessions or .yaml recipe files. Deep bidirectional integration — Amplifier can create Loom jobs too.</p>
+      </div>
+      <div class="code-block">
+        <div class="code-bar">
+          <span class="dot" style="background:#f85149"></span>
+          <span class="dot" style="background:#e3b341"></span>
+          <span class="dot" style="background:#3fb950"></span>
+          <span class="fname">inbox-processor.yaml</span>
+        </div>
+        <div class="code-body"><span class="prop">id</span><span class="pun">: </span><span class="str">process-inbox</span>
+<span class="prop">trigger</span><span class="pun">:</span>
+  <span class="prop">type</span><span class="pun">: </span><span class="kw">watch</span>
+  <span class="prop">path</span><span class="pun">: </span><span class="str">~/Inbox</span>
+  <span class="prop">events</span><span class="pun">: </span><span class="pun">[</span><span class="str">create</span><span class="pun">]</span>
+<span class="prop">executor</span><span class="pun">:</span>
+  <span class="prop">type</span><span class="pun">: </span><span class="kw">amplifier</span>
+  <span class="prop">recipe</span><span class="pun">: </span><span class="str">process-doc.yaml</span></div>
+      </div>
+    </div>
+
+  </div>
+  <div class="speaker-notes">
+    <p><strong>Key point:</strong> The three executor types map to three eras of automation: shell is the Unix era, claude-code is the AI-native era, and amplifier is the multi-agent workflow era. Every executor gets the same scheduler infrastructure — streaming output, history, pause/resume, live UI.</p>
+    <p><strong>If challenged:</strong> "What's the difference between claude-code and amplifier?" claude-code runs a single Claude session via <code>claude -p "..."</code>. amplifier runs a full Amplifier session or a .yaml recipe with full tool access, skill loading, and multi-agent delegation. Amplifier is the more powerful executor; claude-code is lighter weight for simpler tasks.</p>
+    <p><strong>Transition:</strong> Knowing what can run is half the story. The other half is knowing <em>when</em> things should fire — and that's where Loom's trigger system makes everything interesting.</p>
+    <p><strong>Confidence:</strong> High — these are the actual executor types in v0.7.1, exactly as documented.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SLIDE 5 — TRIGGERS (Heavy)
+══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--triggers" aria-label="Five Trigger Types">
+  <header class="slide-header">
+    <p class="eyebrow">Triggers</p>
+    <h2 class="slide-title">Five trigger types — and only one fires when the world actually changes</h2>
+  </header>
+
+  <div class="triggers-body">
+
+    <div class="trigger-row">
+      <div class="trigger-name">
+        <span class="trigger-icon">🕐</span>
+        <span class="badge badge-blue">cron</span>
+      </div>
+      <div class="trigger-desc">
+        Standard cron expressions — but with <strong style="color:var(--text-1);">seconds precision</strong>.
+        <span class="trigger-example">"0/30 * * * * *" — every 30 seconds</span>
+      </div>
+    </div>
+
+    <div class="trigger-row">
+      <div class="trigger-name">
+        <span class="trigger-icon">🔁</span>
+        <span class="badge badge-purple">loop</span>
+      </div>
+      <div class="trigger-desc">
+        Repeating interval — clean, readable, no cron syntax required.
+        <span class="trigger-example">interval: 5m — fire every 5 minutes</span>
+      </div>
+    </div>
+
+    <div class="trigger-row">
+      <div class="trigger-name">
+        <span class="trigger-icon">🎯</span>
+        <span class="badge badge-amber">once</span>
+      </div>
+      <div class="trigger-desc">
+        Run once at a specific time, then auto-disable. No cleanup needed.
+        <span class="trigger-example">at: "2025-12-31T23:59:00" — then disabled</span>
+      </div>
+    </div>
+
+    <div class="trigger-row">
+      <div class="trigger-name">
+        <span class="trigger-icon">👁</span>
+        <span class="badge badge-teal">watch</span>
+      </div>
+      <div class="trigger-desc">
+        OS-level filesystem events via inotify / FSEvents / kqueue. Zero polling.
+        <span class="trigger-example">path: ~/Inbox, events: [create, modify]</span>
+      </div>
+    </div>
+
+    <div class="trigger-row highlight-row">
+      <div class="trigger-name">
+        <span class="trigger-icon">⚡</span>
+        <span class="badge badge-green">connector</span>
+      </div>
+      <div class="trigger-desc">
+        <strong style="color:var(--green);">Fires only when an external service actually changes.</strong> Powered by the Mirror system. Entity-addressed.
+        <span class="trigger-example">entity: github.pr/myorg/repo · amazon.product/B09V3KXJPB</span>
+      </div>
+    </div>
+
+    <div class="trigger-superpower">
+      <span class="sp-icon">💡</span>
+      <p class="sp-text">
+        The <strong>connector trigger</strong> is what makes Loom categorically different from any other scheduler.
+        Most schedulers poll on a timer and fire regardless. Loom's Mirror watches external services,
+        diffs the results field-by-field, and fires jobs <strong>only when something genuinely changed</strong>.
+        Zero wasted AI compute. Zero noise.
+      </p>
+    </div>
+  </div>
+
+  <div class="speaker-notes">
+    <p><strong>Key point:</strong> The first four triggers are excellent — they cover the full spectrum of time-based scheduling. But the connector trigger is in a different category entirely. It transforms Loom from a "run things on a schedule" tool into a "react intelligently to the world" platform. The Mirror system does the heavy lifting.</p>
+    <p><strong>If challenged:</strong> "Can't you just poll and check if something changed in a shell script?" You can, but you're now managing state across runs, handling diff logic, and re-inventing the Mirror system manually for every job. Loom gives you that infrastructure with entity addressing, field-level diffs, and structured change events — once, for free, for any connected service.</p>
+    <p><strong>Transition:</strong> The connector trigger is powered by the Mirror system — let's look at how that works under the hood.</p>
+    <p><strong>Confidence:</strong> High — all five trigger types are live in v0.7.1.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SLIDE 6 — THE MIRROR (Medium)
+══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--mirror" aria-label="The Mirror System">
+  <header class="slide-header">
+    <p class="eyebrow">The Mirror System</p>
+    <h2 class="slide-title">Loom keeps a live shadow of the world — jobs react to changes, not clocks</h2>
+  </header>
+
+  <div class="mirror-body">
+
+    <div class="mirror-col">
+      <div class="mirror-section-label">Entity Addressing</div>
+      <div class="entity-list">
+        <div class="entity-item">
+          <span class="entity-kind">github.pr</span><span class="entity-slash">/</span><span class="entity-path">microsoft/vscode/42</span>
+          <span class="entity-dot"></span>
+        </div>
+        <div class="entity-item">
+          <span class="entity-kind">amazon.product</span><span class="entity-slash">/</span><span class="entity-path">B09V3KXJPB</span>
+          <span class="entity-dot"></span>
+        </div>
+        <div class="entity-item">
+          <span class="entity-kind">teams.channel</span><span class="entity-slash">/</span><span class="entity-path">devops-alerts</span>
+          <span class="entity-dot"></span>
+        </div>
+        <div class="entity-item" style="border-color: var(--border-muted);">
+          <span class="entity-kind" style="color:var(--text-3);">http.api</span><span class="entity-slash">/</span><span class="entity-path" style="color:var(--text-4);">any-endpoint</span>
+          <span class="entity-dot" style="background:var(--blue); box-shadow:0 0 6px var(--blue)"></span>
+        </div>
+      </div>
+
+      <div class="mirror-section-label" style="margin-top:var(--s2);">Fetch Methods</div>
+      <div style="display:flex;flex-wrap:wrap;gap:var(--s2);">
+        <span class="badge badge-blue">Shell command</span>
+        <span class="badge badge-teal">HTTP GET/POST</span>
+        <span class="badge badge-purple">Headless Chrome</span>
+      </div>
+
+      <div class="mirror-section-label" style="margin-top:var(--s2);">How it fires</div>
+      <div class="mirror-flow">
+        <div class="flow-step">
+          <span class="flow-step-icon">📡</span>
+          Poll service
+        </div>
+        <span class="flow-arrow-small">→</span>
+        <div class="flow-step">
+          <span class="flow-step-icon">🔍</span>
+          SHA-256 diff
+        </div>
+        <span class="flow-arrow-small">→</span>
+        <div class="flow-step" style="border-color:var(--border);">
+          <span class="flow-step-icon">🔄</span>
+          Changed?
+        </div>
+        <span class="flow-arrow-small">→</span>
+        <div class="flow-step fire-step">
+          <span class="flow-step-icon">⚡</span>
+          Fire job
+        </div>
+      </div>
+    </div>
+
+    <div class="mirror-col">
+      <div class="mirror-section-label">Live Diff — field-level change detection</div>
+      <div class="diff-visual">
+        <div class="diff-bar">
+          <span>amazon.product/B09V3KXJPB</span>
+          <span class="diff-stat added">+1 added</span>
+          <span class="diff-stat removed">-0 removed</span>
+          <span class="diff-stat changed">~2 modified</span>
+        </div>
+        <div class="diff-lines">
+<span class="diff-ctx">  "asin": "B09V3KXJPB",</span>
+<span class="diff-ctx">  "title": "AirPods Pro (2nd gen)",</span>
+<span class="diff-del">- "price": { "amount": 249.00 },</span>
+<span class="diff-add">+ "price": { "amount": 179.00 },</span>
+<span class="diff-del">- "stock": "In Stock",</span>
+<span class="diff-add">+ "stock": "Only 3 left in stock",</span>
+<span class="diff-add">+ "deal": "Limited time deal"</span>
+<span class="diff-ctx">  "rating": 4.8</span>
+        </div>
+      </div>
+
+      <div class="mirror-section-label" style="margin-top:var(--s4);">What gets passed to your job</div>
+      <div class="code-block">
+        <div class="code-bar">
+          <span class="dot" style="background:#f85149"></span>
+          <span class="dot" style="background:#e3b341"></span>
+          <span class="dot" style="background:#3fb950"></span>
+          <span class="fname">change event injected as env vars</span>
+        </div>
+        <div class="code-body"><span class="prop">LOOM_ENTITY</span><span class="pun">=</span><span class="str">amazon.product/B09V3KXJPB</span>
+<span class="prop">LOOM_CHANGE_TYPE</span><span class="pun">=</span><span class="str">modified</span>
+<span class="prop">LOOM_DIFF_JSON</span><span class="pun">=</span><span class="str">'{"price":{"from":249,"to":179}}'</span>
+<span class="prop">LOOM_PREV_JSON</span><span class="pun">=</span><span class="str">'{ ... full previous state }'</span>
+<span class="prop">LOOM_CURR_JSON</span><span class="pun">=</span><span class="str">'{ ... full current state }'</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="speaker-notes">
+    <p><strong>Key point:</strong> The Mirror subsystem is Loom's secret weapon. It maintains a local shadow copy of external services, computes field-level SHA-256 diffs on every poll, and fires the connector job only when something in that diff is non-empty. Jobs get the full structured change event as environment variables — they don't need to re-fetch or parse anything.</p>
+    <p><strong>If challenged:</strong> "What about rate limiting? What if I have 20 jobs watching the same GitHub repo?" The Mirror is the fetch layer — it polls once per configured interval and fans out to all waiting connector jobs. Multiple jobs watching the same entity do not multiply API calls. The mirror handles deduplication automatically.</p>
+    <p><strong>Transition:</strong> Theory is one thing. Let me show you three concrete workflows that would take days to build any other way — and Loom handles them out of the box.</p>
+    <p><strong>Confidence:</strong> High — Mirror is live in v0.7.1, including headless Chrome via agent-browser, field-level SHA-256 diff, and env var injection.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SLIDE 7 — USE CASES (Heavy)
+══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--usecases" aria-label="Three Scenarios">
+  <header class="slide-header">
+    <p class="eyebrow">Real Workflows</p>
+    <h2 class="slide-title">Three scenarios that would take days to build anywhere else — Loom handles them out of the box</h2>
+  </header>
+
+  <div class="usecases-body">
+
+    <div class="usecase-card uc-teams">
+      <div class="uc-header">
+        <span class="uc-icon">💬</span>
+        <div>
+          <div class="uc-title-text">Incident Response</div>
+          <div class="uc-source">Teams message monitoring → AI response</div>
+        </div>
+      </div>
+      <div class="uc-steps">
+        <div class="uc-step">
+          <span class="uc-step-num">1</span>
+          <span class="uc-step-text">Someone types <strong>"production is down"</strong> in the DevOps Teams channel</span>
+        </div>
+        <div class="uc-step">
+          <span class="uc-step-num">2</span>
+          <span class="uc-step-text">Mirror detects the new message via connector trigger — <strong>within 30 seconds</strong></span>
+        </div>
+        <div class="uc-step">
+          <span class="uc-step-num">3</span>
+          <span class="uc-step-text">Amplifier incident-response recipe fires — <strong>streaming live in browser</strong></span>
+        </div>
+        <div class="uc-step">
+          <span class="uc-step-num">4</span>
+          <span class="uc-step-text">AI diagnosis, runbook lookup, alert routing — all <strong>automated and visible</strong></span>
+        </div>
+      </div>
+      <div class="uc-time">⚡ Detected and responding in &lt;30 seconds</div>
+    </div>
+
+    <div class="usecase-card uc-amazon">
+      <div class="uc-header">
+        <span class="uc-icon">🎧</span>
+        <div>
+          <div class="uc-title-text">Price Drop Alert</div>
+          <div class="uc-source">Amazon product watch → native notification</div>
+        </div>
+      </div>
+      <div class="uc-steps">
+        <div class="uc-step">
+          <span class="uc-step-num">1</span>
+          <span class="uc-step-text">Mirror watches <strong>AirPods Pro</strong> via headless Chrome scrape</span>
+        </div>
+        <div class="uc-step">
+          <span class="uc-step-num">2</span>
+          <span class="uc-step-text">Price drops from <strong>$249 → $179</strong> — field-level diff fires connector</span>
+        </div>
+        <div class="uc-step">
+          <span class="uc-step-num">3</span>
+          <span class="uc-step-text">Shell executor fires <strong>macOS notification</strong> with exact price and link</span>
+        </div>
+        <div class="uc-step">
+          <span class="uc-step-num">4</span>
+          <span class="uc-step-text">You click the notification. <strong>You click Buy.</strong> Done.</span>
+        </div>
+      </div>
+      <div class="uc-time">💰 $70 saved. Zero manual checking.</div>
+    </div>
+
+    <div class="usecase-card uc-inbox">
+      <div class="uc-header">
+        <span class="uc-icon">📂</span>
+        <div>
+          <div class="uc-title-text">AI Document Pipeline</div>
+          <div class="uc-source">Filesystem watch → AI processing → Projects</div>
+        </div>
+      </div>
+      <div class="uc-steps">
+        <div class="uc-step">
+          <span class="uc-step-num">1</span>
+          <span class="uc-step-text">File drops into <strong>~/Inbox</strong> — watch trigger fires instantly via FSEvents</span>
+        </div>
+        <div class="uc-step">
+          <span class="uc-step-num">2</span>
+          <span class="uc-step-text">Amplifier recipe <strong>processes the document</strong> — summarize, classify, act</span>
+        </div>
+        <div class="uc-step">
+          <span class="uc-step-num">3</span>
+          <span class="uc-step-text">Session named by AI using context — appears in <strong>Projects tab</strong></span>
+        </div>
+        <div class="uc-step">
+          <span class="uc-step-num">4</span>
+          <span class="uc-step-text"><strong>Full streaming history</strong> visible in browser. Pause, retry, inspect.</span>
+        </div>
+      </div>
+      <div class="uc-time">🤖 Drop a file. AI handles the rest.</div>
+    </div>
+
+  </div>
+
+  <div class="speaker-notes">
+    <p><strong>Key point:</strong> These three scenarios represent the three killer use cases for Loom: reactive incident response, price/change monitoring with alerts, and file-based AI document pipelines. Each of these would require writing separate tooling — a webhook server, a scraper, a file watcher daemon — without Loom. With Loom, they're three YAML job definitions.</p>
+    <p><strong>If challenged:</strong> "What if the AI session fails during incident response?" Every executor run is logged with its full stdout/stderr stream. You can see exactly what the AI did, where it stopped, and why. Retry is a single button click in the UI. Failed runs stay in history — nothing is lost.</p>
+    <p><strong>Transition:</strong> All of these scenarios are visible, manageable, and inspectable from one place — the Loom web UI at localhost:7700.</p>
+    <p><strong>Confidence:</strong> High — all three scenarios are tested workflows. Teams monitoring and Amazon price watching are live integrations. Filesystem watch with Amplifier recipe is the canonical demo.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SLIDE 8 — WEB UI (Medium)
+══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--ui" aria-label="Web UI">
+  <header class="slide-header">
+    <p class="eyebrow">Web UI · localhost:7700</p>
+    <h2 class="slide-title">Everything in one browser tab — plain-English job creation, live streaming output, embedded terminals</h2>
+  </header>
+
+  <div class="ui-body">
+
+    <div class="ui-features">
+      <div class="ui-feature">
+        <div class="ui-feature-label">4 Tabs</div>
+        <div class="ui-feature-text"><strong>Projects</strong> · <strong>Jobs</strong> · <strong>Mirror</strong> · <strong>Bundles</strong> — everything organized and queryable.</div>
+      </div>
+      <div class="ui-feature">
+        <div class="ui-feature-label">AI Assistant</div>
+        <div class="ui-feature-text">Describe a job in <strong>plain English</strong> → Loom creates it. No YAML required.</div>
+      </div>
+      <div class="ui-feature">
+        <div class="ui-feature-label">Live Streaming</div>
+        <div class="ui-feature-text"><strong>Real-time SSE output</strong> as jobs run. Reconnect mid-run and catch up via ring buffer.</div>
+      </div>
+      <div class="ui-feature">
+        <div class="ui-feature-label">Embedded Terminals</div>
+        <div class="ui-feature-text"><strong>WebSocket PTY bridge</strong> — full interactive terminals directly in the browser.</div>
+      </div>
+      <div class="ui-feature">
+        <div class="ui-feature-label">System Tray</div>
+        <div class="ui-feature-text">macOS system tray with <strong>health checking</strong>. Auto-updater built in.</div>
+      </div>
+    </div>
+
+    <div class="ui-mock">
+      <div class="browser-frame">
+        <div class="browser-bar">
+          <div class="browser-dots">
+            <span class="browser-dot b-red"></span>
+            <span class="browser-dot b-amber"></span>
+            <span class="browser-dot b-green"></span>
+          </div>
+          <div class="browser-url">localhost:7700</div>
+        </div>
+        <div class="browser-body">
+          <div class="browser-tabs">
+            <div class="browser-tab">Projects</div>
+            <div class="browser-tab active-tab">Jobs</div>
+            <div class="browser-tab">Mirror</div>
+            <div class="browser-tab">Bundles</div>
+          </div>
+
+          <div class="ui-ai-bar">
+            <span class="ai-bar-icon">✦</span>
+            <span class="ai-bar-text">Describe a job... e.g. "Check AirPods price every hour and alert me if it drops"</span>
+            <button class="ai-bar-send">Create</button>
+          </div>
+
+          <div class="job-rows">
+            <div class="job-row">
+              <span class="job-status-dot running"></span>
+              <span class="job-name">review-pr</span>
+              <span class="job-type">claude-code · connector</span>
+            </div>
+            <div class="job-row">
+              <span class="job-status-dot idle"></span>
+              <span class="job-name">daily-backup</span>
+              <span class="job-type">shell · cron 02:00</span>
+            </div>
+            <div class="job-row">
+              <span class="job-status-dot queued"></span>
+              <span class="job-name">process-inbox</span>
+              <span class="job-type">amplifier · watch ~/Inbox</span>
+            </div>
+            <div class="job-row">
+              <span class="job-status-dot idle"></span>
+              <span class="job-name">airpods-price-watch</span>
+              <span class="job-type">shell · connector amazon.product/…</span>
+            </div>
+          </div>
+
+          <div class="sse-output">
+            <span class="sse-line-green">● review-pr [claude-opus-4-5] started</span><br>
+            <span class="sse-line-blue">→ Analyzing PR #847: "Add rate limiting to auth service"</span><br>
+            <span>  Reading 14 changed files…</span><br>
+            <span>  Checking test coverage delta…</span><br>
+            <span class="sse-cursor"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="speaker-notes">
+    <p><strong>Key point:</strong> The UI isn't bolted on — it's the primary interface. The AI assistant means even non-engineers can create jobs by describing them in plain English. The SSE ring buffer means you can refresh the page mid-job and catch up on everything you missed. The embedded PTY gives you a real terminal inside the browser for debugging.</p>
+    <p><strong>If challenged:</strong> "Is the UI a separate process I have to run?" No — the entire React SPA is compiled and embedded in the Go binary. There is no separate web server to start. `loom daemon` starts everything. The frontend is just part of the binary.</p>
+    <p><strong>Transition:</strong> The UI is one window into the ecosystem. Let's look at everything Loom connects to.</p>
+    <p><strong>Confidence:</strong> High — all UI features are live in v0.7.1. The AI assistant job creation is the flagship demo feature.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SLIDE 9 — INTEGRATIONS (Medium)
+══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--integrations" aria-label="Integrations">
+  <header class="slide-header">
+    <p class="eyebrow">Integrations</p>
+    <h2 class="slide-title">Loom connects to the tools you already use — and anything with an HTTP API</h2>
+  </header>
+
+  <div class="integrations-body">
+
+    <div class="integrations-diagram" aria-label="Hub and spoke diagram with Loom at center">
+      <svg viewBox="0 0 520 420" width="440" height="352" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrowB" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto">
+            <polygon points="0 0, 6 2.5, 0 5" fill="#30363d"/>
+          </marker>
+        </defs>
+
+        <!-- Connection lines (drawn before nodes so nodes appear on top) -->
+        <!-- Amp -->
+        <line class="int-node conn-line" x1="260" y1="210" x2="130" y2="100" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="120" stroke-dashoffset="120" opacity="0.5"/>
+        <!-- Claude -->
+        <line class="int-node conn-line" x1="260" y1="210" x2="380" y2="90" stroke="#d2a8ff" stroke-width="1.5" stroke-dasharray="160" stroke-dashoffset="160" opacity="0.5"/>
+        <!-- Teams -->
+        <line class="int-node conn-line" x1="260" y1="210" x2="460" y2="210" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="200" stroke-dashoffset="200" opacity="0.5"/>
+        <!-- GitHub -->
+        <line class="int-node conn-line" x1="260" y1="210" x2="390" y2="340" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="180" stroke-dashoffset="180" opacity="0.5"/>
+        <!-- Amazon -->
+        <line class="int-node conn-line" x1="260" y1="210" x2="130" y2="340" stroke="#e3b341" stroke-width="1.5" stroke-dasharray="180" stroke-dashoffset="180" opacity="0.5"/>
+        <!-- Shell -->
+        <line class="int-node conn-line" x1="260" y1="210" x2="60" y2="210" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="200" stroke-dashoffset="200" opacity="0.5"/>
+        <!-- HTTP -->
+        <line class="int-node conn-line" x1="260" y1="210" x2="210" y2="60" stroke="#39d0d8" stroke-width="1.5" stroke-dasharray="160" stroke-dashoffset="160" opacity="0.5"/>
+
+        <!-- Hub: Loom -->
+        <g class="int-node hub-node">
+          <circle cx="260" cy="210" r="44" fill="#161b22" stroke="#58a6ff" stroke-width="2"/>
+          <circle cx="260" cy="210" r="44" fill="none" stroke="#58a6ff" stroke-width="1" opacity="0.3" style="animation:pulse 2.5s ease-in-out infinite"/>
+          <text x="260" y="205" text-anchor="middle" font-size="15" font-weight="800" fill="#f0f6fc" font-family="-apple-system,system-ui,sans-serif">Loom</text>
+          <text x="260" y="221" text-anchor="middle" font-size="9.5" fill="#58a6ff" font-family="-apple-system,system-ui,sans-serif" font-weight="600" letter-spacing="0.08em">SCHEDULER</text>
+        </g>
+
+        <!-- Spoke: Amplifier -->
+        <g class="int-node spoke-amp">
+          <rect x="68" y="64" width="124" height="44" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+          <text x="130" y="83" text-anchor="middle" font-size="12" font-weight="700" fill="#3fb950" font-family="-apple-system,system-ui,sans-serif">Amplifier</text>
+          <text x="130" y="98" text-anchor="middle" font-size="10" fill="#8b949e" font-family="-apple-system,system-ui,sans-serif">Deep bidirectional</text>
+        </g>
+
+        <!-- Spoke: Claude Code -->
+        <g class="int-node spoke-claude">
+          <rect x="315" y="53" width="130" height="44" rx="6" fill="#161b22" stroke="#d2a8ff" stroke-width="1.5"/>
+          <text x="380" y="72" text-anchor="middle" font-size="12" font-weight="700" fill="#d2a8ff" font-family="-apple-system,system-ui,sans-serif">Claude Code</text>
+          <text x="380" y="87" text-anchor="middle" font-size="10" fill="#8b949e" font-family="-apple-system,system-ui,sans-serif">First-class executor</text>
+        </g>
+
+        <!-- Spoke: Teams -->
+        <g class="int-node spoke-teams">
+          <rect x="390" y="188" width="118" height="44" rx="6" fill="#161b22" stroke="#58a6ff" stroke-width="1.5"/>
+          <text x="449" y="207" text-anchor="middle" font-size="12" font-weight="700" fill="#58a6ff" font-family="-apple-system,system-ui,sans-serif">MS Teams</text>
+          <text x="449" y="222" text-anchor="middle" font-size="10" fill="#8b949e" font-family="-apple-system,system-ui,sans-serif">Message monitoring</text>
+        </g>
+
+        <!-- Spoke: GitHub -->
+        <g class="int-node spoke-gh">
+          <rect x="325" y="316" width="130" height="44" rx="6" fill="#161b22" stroke="#8b949e" stroke-width="1.5"/>
+          <text x="390" y="335" text-anchor="middle" font-size="12" font-weight="700" fill="#c9d1d9" font-family="-apple-system,system-ui,sans-serif">GitHub</text>
+          <text x="390" y="350" text-anchor="middle" font-size="10" fill="#8b949e" font-family="-apple-system,system-ui,sans-serif">PR / review / comments</text>
+        </g>
+
+        <!-- Spoke: Amazon -->
+        <g class="int-node spoke-amz">
+          <rect x="60" y="316" width="140" height="44" rx="6" fill="#161b22" stroke="#e3b341" stroke-width="1.5"/>
+          <text x="130" y="335" text-anchor="middle" font-size="12" font-weight="700" fill="#e3b341" font-family="-apple-system,system-ui,sans-serif">Amazon</text>
+          <text x="130" y="350" text-anchor="middle" font-size="10" fill="#8b949e" font-family="-apple-system,system-ui,sans-serif">Price watch · headless</text>
+        </g>
+
+        <!-- Spoke: Shell -->
+        <g class="int-node spoke-shell">
+          <rect x="0" y="188" width="118" height="44" rx="6" fill="#161b22" stroke="#484f58" stroke-width="1.5"/>
+          <text x="59" y="207" text-anchor="middle" font-size="12" font-weight="700" fill="#8b949e" font-family="-apple-system,system-ui,sans-serif">Shell / CLI</text>
+          <text x="59" y="222" text-anchor="middle" font-size="10" fill="#484f58" font-family="-apple-system,system-ui,sans-serif">Any command</text>
+        </g>
+
+        <!-- Spoke: HTTP API -->
+        <g class="int-node spoke-http">
+          <rect x="148" y="28" width="124" height="44" rx="6" fill="#161b22" stroke="#39d0d8" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="210" y="47" text-anchor="middle" font-size="12" font-weight="700" fill="#39d0d8" font-family="-apple-system,system-ui,sans-serif">Any HTTP API</text>
+          <text x="210" y="62" text-anchor="middle" font-size="10" fill="#8b949e" font-family="-apple-system,system-ui,sans-serif">Connector + optional auth</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="int-desc">
+      <div class="int-item">
+        <div class="int-label" style="color:var(--green);">Amplifier — Deepest Integration</div>
+        <div class="int-text">Bidirectional — Loom runs Amplifier recipes <em>and</em> Amplifier sessions can create, manage, and inspect Loom jobs.</div>
+      </div>
+      <div class="int-item">
+        <div class="int-label" style="color:var(--purple);">Claude Code — First-Class Executor</div>
+        <div class="int-text">Not a shell wrapper. Native executor type with model selection, streaming output, and session management.</div>
+      </div>
+      <div class="int-item">
+        <div class="int-label" style="color:var(--blue);">Microsoft Teams</div>
+        <div class="int-text">Monitor channels for keywords → trigger incident response recipes. 30-second detection latency.</div>
+      </div>
+      <div class="int-item">
+        <div class="int-label" style="color:var(--teal);">Any HTTP API</div>
+        <div class="int-text">Connector with optional auth headers. If it has an endpoint, Loom can watch it.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="speaker-notes">
+    <p><strong>Key point:</strong> The Amplifier integration is worth highlighting specifically — it's the only bidirectional integration in the ecosystem. Every other integration is "Loom watches X." With Amplifier, sessions running inside Loom can also call back to create new Loom jobs, inspect the Mirror, and manage the scheduler programmatically. This enables truly self-managing workflows.</p>
+    <p><strong>If challenged:</strong> "What about Slack? PagerDuty? Jira?" Anything with an HTTP API is a connector target today. Slack webhooks, PagerDuty alerts, Jira issue state — all connectable via the HTTP connector type. Native integrations for those services are roadmap items.</p>
+    <p><strong>Transition:</strong> Before we close, let's look at what's actually under the hood — the raw numbers from ~2.5 weeks of development.</p>
+    <p><strong>Confidence:</strong> High — all listed integrations are live in v0.7.1.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SLIDE 10 — THE NUMBERS (Light)
+══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--numbers" aria-label="The Numbers">
+
+  <div class="numbers-body">
+    <div class="numbers-hero">
+      <div class="numbers-big" id="main-stat">2.5</div>
+      <div class="numbers-big-label">weeks of development</div>
+      <div class="numbers-sub">v0.7.1 · 20+ releases · 204 commits · shipped and running</div>
+    </div>
+
+    <div class="numbers-grid">
+      <div class="num-card">
+        <div class="num-value">~13,400</div>
+        <div class="num-desc">lines of Go<br>across 18 packages</div>
+      </div>
+      <div class="num-card">
+        <div class="num-value">5</div>
+        <div class="num-desc">platforms<br>macOS arm64/amd64 · Linux · Windows</div>
+      </div>
+      <div class="num-card">
+        <div class="num-value">0</div>
+        <div class="num-desc">external DB deps<br>embedded bbolt KV store</div>
+      </div>
+      <div class="num-card">
+        <div class="num-value">10/10</div>
+        <div class="num-desc">SSE integration checks<br>live streaming · ring buffer</div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SLIDE 11 — ARCHITECTURE (Medium)
+══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--architecture" aria-label="Architecture">
+  <header class="slide-header">
+    <p class="eyebrow">Architecture</p>
+    <h2 class="slide-title">One Go binary, embedded React SPA, zero runtime dependencies — the whole thing ships in a single curl</h2>
+  </header>
+
+  <div class="arch-body">
+
+    <div class="arch-diagram" aria-label="Architecture diagram">
+      <svg viewBox="0 0 480 360" width="440" height="330" xmlns="http://www.w3.org/2000/svg">
+
+        <!-- Go binary outer shell -->
+        <g class="arch-box">
+          <rect x="20" y="20" width="440" height="290" rx="10" fill="none" stroke="#30363d" stroke-width="2" stroke-dasharray="8 4"/>
+          <text x="36" y="44" font-size="11" font-weight="700" fill="#484f58" font-family="-apple-system,system-ui,sans-serif" letter-spacing="0.1em">GO BINARY — loom</text>
+        </g>
+
+        <!-- HTTP/API server -->
+        <g class="arch-box">
+          <rect x="40" y="56" width="160" height="50" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+          <text x="120" y="78" text-anchor="middle" font-size="12" font-weight="700" fill="#f0f6fc" font-family="-apple-system,system-ui,sans-serif">HTTP API Server</text>
+          <text x="120" y="94" text-anchor="middle" font-size="10" fill="#8b949e" font-family="-apple-system,system-ui,sans-serif">REST · SSE · WebSocket PTY</text>
+        </g>
+
+        <!-- Embedded React SPA -->
+        <g class="arch-box">
+          <rect x="280" y="56" width="160" height="50" rx="6" fill="#161b22" stroke="#58a6ff" stroke-width="1.5"/>
+          <text x="360" y="78" text-anchor="middle" font-size="12" font-weight="700" fill="#58a6ff" font-family="-apple-system,system-ui,sans-serif">React SPA</text>
+          <text x="360" y="94" text-anchor="middle" font-size="10" fill="#8b949e" font-family="-apple-system,system-ui,sans-serif">Embedded · Vite + Tailwind</text>
+        </g>
+
+        <!-- Job Engine -->
+        <g class="arch-box">
+          <rect x="40" y="150" width="160" height="50" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+          <text x="120" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#3fb950" font-family="-apple-system,system-ui,sans-serif">Job Engine</text>
+          <text x="120" y="188" text-anchor="middle" font-size="10" fill="#8b949e" font-family="-apple-system,system-ui,sans-serif">Scheduler · Executor Pool</text>
+        </g>
+
+        <!-- Mirror Engine -->
+        <g class="arch-box">
+          <rect x="280" y="150" width="160" height="50" rx="6" fill="#161b22" stroke="#d2a8ff" stroke-width="1.5"/>
+          <text x="360" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#d2a8ff" font-family="-apple-system,system-ui,sans-serif">Mirror Engine</text>
+          <text x="360" y="188" text-anchor="middle" font-size="10" fill="#8b949e" font-family="-apple-system,system-ui,sans-serif">Poll · Diff · Connector fire</text>
+        </g>
+
+        <!-- bbolt DB -->
+        <g class="arch-box">
+          <rect x="160" y="244" width="160" height="50" rx="6" fill="#161b22" stroke="#e3b341" stroke-width="1.5"/>
+          <text x="240" y="266" text-anchor="middle" font-size="12" font-weight="700" fill="#e3b341" font-family="-apple-system,system-ui,sans-serif">bbolt KV Store</text>
+          <text x="240" y="282" text-anchor="middle" font-size="10" fill="#8b949e" font-family="-apple-system,system-ui,sans-serif">Embedded · Zero deps · ACID</text>
+        </g>
+
+        <!-- Internal connections -->
+        <g class="arch-conn">
+          <!-- HTTP → Job Engine -->
+          <line x1="120" y1="106" x2="120" y2="150" stroke="#30363d" stroke-width="1.2"/>
+          <!-- HTTP → Mirror Engine (horizontal) -->
+          <line x1="200" y1="81" x2="280" y2="81" stroke="#30363d" stroke-width="1.2" stroke-dasharray="4 2"/>
+          <!-- Job Engine → bbolt -->
+          <line x1="120" y1="200" x2="200" y2="244" stroke="#30363d" stroke-width="1.2"/>
+          <!-- Mirror Engine → bbolt -->
+          <line x1="360" y1="200" x2="296" y2="244" stroke="#30363d" stroke-width="1.2"/>
+          <!-- React → HTTP -->
+          <line x1="280" y1="81" x2="200" y2="81" stroke="#58a6ff" stroke-width="1" opacity="0.4" stroke-dasharray="3 2"/>
+          <!-- Mirror → Job Engine (trigger) -->
+          <line x1="280" y1="175" x2="200" y2="175" stroke="#d2a8ff" stroke-width="1.2" stroke-dasharray="4 2"/>
+          <!-- Arrow heads (simplified) -->
+          <polygon points="198,172 206,175 198,178" fill="#d2a8ff" opacity="0.6"/>
+          <polygon points="122,145 118,150 126,150" fill="#30363d" opacity="0.8"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="arch-desc">
+      <div class="arch-point">
+        <div class="arch-point-label">Single Binary</div>
+        <div class="arch-point-text">The entire React SPA is compiled by Vite and <code style="font-family:var(--mono);font-size:0.85em;color:var(--blue);">go:embed</code>-ed into the binary at build time. One file ships it all.</div>
+      </div>
+      <div class="arch-point">
+        <div class="arch-point-label">Zero Runtime Deps</div>
+        <div class="arch-point-text">No PostgreSQL, Redis, or Node process required. bbolt is a pure-Go embedded key-value store. <code style="font-family:var(--mono);font-size:0.85em;color:var(--amber);">curl | bash</code> and you're running.</div>
+      </div>
+      <div class="arch-point">
+        <div class="arch-point-label">SSE Ring Buffer</div>
+        <div class="arch-point-text">Streaming output is broadcast via SSE with a ring buffer. Refresh the browser mid-run and you'll catch up on everything you missed.</div>
+      </div>
+      <div class="arch-point">
+        <div class="arch-point-label">WebSocket PTY Bridge</div>
+        <div class="arch-point-text">A full PTY bridge over WebSocket powers the embedded terminals. Real <code style="font-family:var(--mono);font-size:0.85em;color:var(--teal);">xterm.js</code> sessions in the browser.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="speaker-notes">
+    <p><strong>Key point:</strong> The architectural decision to embed everything in a single binary is deliberate. It makes distribution trivial, removes deployment ceremony entirely, and means there's no version mismatch between the frontend and backend. The binary you download is the complete, runnable product.</p>
+    <p><strong>If challenged:</strong> "What happens to job history when the binary is upgraded?" bbolt persists to disk (typically <code>~/.loom/loom.db</code>). History, mirror state, and job definitions survive binary upgrades. The auto-updater in the macOS tray handles upgrades without losing state.</p>
+    <p><strong>Transition:</strong> The architecture is sound. The install is one command. Let's look at exactly what it takes to get started.</p>
+    <p><strong>Confidence:</strong> High — the single-binary embed architecture is confirmed working in v0.7.1 across all 5 platforms.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SLIDE 12 — GET STARTED (Light)
+══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--install" aria-label="Get Started">
+
+  <div class="install-body">
+    <p class="eyebrow install-eyebrow">Get Started</p>
+    <h1 class="install-title">One command to install. Describe your first job in plain English.</h1>
+
+    <div class="install-cmd">
+      <div class="install-command">
+        <div class="install-cmd-bar">
+          <div class="term-dots">
+            <span class="browser-dot b-red"></span>
+            <span class="browser-dot b-amber"></span>
+            <span class="browser-dot b-green"></span>
+          </div>
+          <span>bash · install loom</span>
+        </div>
+        <div class="install-cmd-code"><span style="color:var(--text-3);">$</span> <span style="color:var(--green);">curl</span> <span style="color:var(--syn-val);">-fsSL</span> <span style="color:var(--syn-str);">https://raw.githubusercontent.com/ms/amplifier-app-loom/</span><br>  <span style="color:var(--syn-str);">main/.amplifier/scripts/install.sh</span> <span style="color:var(--text-3);">|</span> <span style="color:var(--green);">bash</span>
+
+<span style="color:var(--text-4);">✓  Detected macOS arm64</span>
+<span style="color:var(--text-4);">✓  Downloading loom v0.7.1...</span>
+<span style="color:var(--text-4);">✓  Installed to /usr/local/bin/loom</span>
+<span style="color:var(--green);">✓  Loom is ready. Starting daemon...</span>
+
+<span style="color:var(--text-3);">$</span> <span style="color:var(--blue);">open</span> http://localhost:7700</div>
+      </div>
+    </div>
+
+    <span class="install-or">— or start with Amplifier —</span>
+
+    <div class="install-paths install-paths-grid">
+      <div class="install-path">
+        <div class="install-path-label web">Web UI</div>
+        <div class="install-path-text">Open <span style="color:var(--blue);">localhost:7700</span> → click the AI assistant bar → describe your first job in plain English → it's running.</div>
+      </div>
+      <div class="install-path">
+        <div class="install-path-label amp">Amplifier Session</div>
+        <div class="install-path-text">Start an Amplifier session → <span style="color:var(--green);">load_skill("loom-cli")</span> → full command reference and job management from the CLI.</div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SLIDE 13 — CLOSING QUOTE (Light / Dramatic)
+══════════════════════════════════════════════════════════════ -->
+<section class="slide slide--quote" aria-label="The Aha Moment">
+
+  <div class="quote-glow" aria-hidden="true"></div>
+
+  <div class="quote-body">
+    <div class="quote-mark" aria-hidden="true">"</div>
+
+    <blockquote class="quote-text">
+      Loom is what happens when you take the ancient idea of
+      <em>'run this command at a time'</em>
+      and rebuild it from scratch for a world where the most powerful 'commands'
+      are <em>AI sessions</em>, and the most interesting 'times' are
+      <strong>when something in the world changes.</strong>
+    </blockquote>
+
+    <div class="quote-rule" aria-hidden="true"></div>
+    <div class="quote-author">Loom · v0.7.1 · Built in ~2.5 weeks</div>
+
+    <div class="quote-cta">
+      Cron for the AI era. <span class="cta-accent">Available now.</span>
+    </div>
+
+    <div id="closing-badges" class="closing-badges-wrap">
+      <span class="badge badge-green">localhost:7700</span>
+      <span class="badge badge-blue">5 Platforms</span>
+      <span class="badge badge-teal">Zero Deps</span>
+      <span class="badge badge-purple">AI-Native</span>
+    </div>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     NAVIGATION ENGINE
+══════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  'use strict';
+
+  /* ── References ─────────────────────────────────────── */
+  var slides      = document.querySelectorAll('.slide');
+  var total       = slides.length;
+  var bar         = document.getElementById('deck-progress');
+  var counter     = document.getElementById('slide-counter');
+  var current     = 0;
+  var notesOpen   = false;
+  var touchStartX = 0;
+
+  /* ── Chrome ─────────────────────────────────────────── */
+  function updateChrome() {
+    var pct = total > 1 ? (current / (total - 1)) * 100 : 100;
+    bar.style.width = pct + '%';
+    bar.setAttribute('aria-valuenow', Math.round(pct));
+    counter.textContent = (current + 1) + ' / ' + total;
+  }
+
+  /* ── Navigation ─────────────────────────────────────── */
+  function goTo(i) {
+    if (i < 0 || i >= total) return;
+    slides[current].classList.remove('active');
+    slides[current].style.display = 'none';
+    current = i;
+    slides[current].style.display = 'flex';
+    void slides[current].offsetWidth; /* reflow → entrance animations replay */
+    slides[current].classList.add('active');
+    updateChrome();
+    /* Trigger slide-specific JS on entry */
+    onSlideEnter(current);
+  }
+
+  /* ── Initialize ─────────────────────────────────────── */
+  slides.forEach(function (s, idx) {
+    s.style.display = idx === 0 ? 'flex' : 'none';
+  });
+  slides[0].classList.add('active');
+  updateChrome();
+  onSlideEnter(0);
+
+  /* ── Keyboard ───────────────────────────────────────── */
+  document.addEventListener('keydown', function (e) {
+    switch (e.key) {
+      case 'ArrowRight': case 'ArrowDown':
+        e.preventDefault(); goTo(current + 1); break;
+      case 'ArrowLeft': case 'ArrowUp':
+        e.preventDefault(); goTo(current - 1); break;
+      case 'Home': e.preventDefault(); goTo(0); break;
+      case 'End':  e.preventDefault(); goTo(total - 1); break;
+      case 's': case 'S':
+        e.preventDefault();
+        notesOpen = !notesOpen;
+        document.querySelectorAll('.speaker-notes').forEach(function (n) {
+          n.style.display = notesOpen ? 'block' : 'none';
+        });
+        break;
+    }
+  });
+
+  /* ── Touch ──────────────────────────────────────────── */
+  document.addEventListener('touchstart', function (e) {
+    touchStartX = e.changedTouches[0].clientX;
+  }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    var dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 50) goTo(current + (dx < 0 ? 1 : -1));
+  }, { passive: true });
+
+  /* ── Slide-specific JS triggers ─────────────────────── */
+  var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function countUp(el, target, duration, suffix) {
+    if (prefersReducedMotion || !el) { if (el) el.textContent = target + (suffix || ''); return; }
+    var start = null;
+    function step(ts) {
+      if (!start) start = ts;
+      var p = Math.min((ts - start) / duration, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = (Math.round(eased * target)) + (suffix || '');
+      if (p < 1) requestAnimationFrame(step);
+      else el.textContent = target + (suffix || '');
+    }
+    requestAnimationFrame(step);
+  }
+
+  var numbersAnimated = false;
+  var closingBadgesShown = false;
+
+  function onSlideEnter(idx) {
+    /* Slide 10 (index 9) — numbers hero countUp (one countUp per deck rule) */
+    if (idx === 9 && !numbersAnimated) {
+      numbersAnimated = true;
+      /* We don't countUp the "2.5" — it's already the most dramatic element.
+         Instead animate the sub-label and let CSS handle the rest. */
+    }
+
+    /* Slide 13 (index 12) — closing badges staggered after quote */
+    if (idx === 12 && !closingBadgesShown) {
+      closingBadgesShown = true;
+      var badges = document.getElementById('closing-badges');
+      if (badges) {
+        setTimeout(function () {
+          badges.style.animation = 'fadeUp 0.5s ease-out forwards';
+        }, 1600);
+      }
+    }
+  }
+
+  /* ── Hub-and-spoke: ambient pulse after integrations diagram builds ── */
+  var intPulseStarted = false;
+  (function watchIntSlide() {
+    var intSlide = document.querySelector('.slide--integrations');
+    if (!intSlide) return;
+    var obs = new MutationObserver(function (mutations) {
+      mutations.forEach(function (m) {
+        if (m.attributeName === 'class' && intSlide.classList.contains('active') && !intPulseStarted) {
+          intPulseStarted = true;
+          /* Hub pulse added via CSS animation already on the circle element */
+        }
+      });
+    });
+    obs.observe(intSlide, { attributes: true });
+  })();
+
+})();
+</script>
+
+<!-- PRESENTATION METADATA
+Specialist: presentation-builder
+Input type: detailed feature brief + developer show-and-tell
+Audience: developer team / show-and-tell
+Purpose: showcase Loom AI-native job scheduler
+Framework: problem-solution-impact
+Slide count: 13
+Visual rhythm: light → medium → light → medium → heavy → medium → heavy → medium → medium → light → medium → light → light
+-->
+
+<!-- CONTENT MAP
+C1: "Cron has zero concept of AI sessions or change detection" | used in: slides 2, 5
+C2: "Loom weaves threads (AI, shell, data streams) into fabric (workflows)" | used in: slides 1, 3
+C3: "Three executor types: shell, claude-code, amplifier" | used in: slide 4
+C4: "Five trigger types — connector fires only on change" | used in: slides 5, 6
+C5: "Mirror maintains local shadow copy; field-level SHA-256 diff" | used in: slide 6
+C6: "Teams incident response < 30 seconds; Amazon price drop; Inbox AI pipeline" | used in: slide 7
+C7: "localhost:7700; 4 tabs; AI job creation; SSE streaming; embedded PTY" | used in: slide 8
+C8: "Bidirectional Amplifier integration; Teams/GitHub/Amazon/HTTP" | used in: slide 9
+C9: "v0.7.1 / 204 commits / ~13,400 lines Go / 18 packages / 5 platforms / 2.5 weeks" | used in: slides 10
+C10: "Single Go binary + embedded React SPA + bbolt = zero runtime deps" | used in: slides 11, 12
+C11: "Core quote: 'run this command at a time' rebuilt for AI era" | used in: slide 13
+-->
+
+</body>
+</html>
