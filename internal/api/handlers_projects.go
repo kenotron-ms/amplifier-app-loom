@@ -175,6 +175,19 @@ func (s *Server) spawnTerminal(w http.ResponseWriter, r *http.Request) {
 	// that often doesn't include ~/.local/bin where uv/pip install tools.
 	ampBin := resolveAmplifier()
 
+	// Pre-create the amplifier session so we know the ID *before* the PTY starts.
+	// This means we always use --resume <id> and never parse the startup banner.
+	if sess.AmplifierSessionID == "" {
+		if ampID, prepErr := amplifier.PrepareSession(sess.WorktreePath); prepErr != nil {
+			slog.Warn("PrepareSession failed — falling back to banner capture",
+				"err", prepErr)
+		} else if setErr := s.workspaceStore.SetAmplifierSessionID(r.Context(), sid, ampID); setErr == nil {
+			sess.AmplifierSessionID = ampID
+			slog.Info("amplifier session pre-created",
+				"loom_session", sid, "amp_session", ampID)
+		}
+	}
+
 	ampCmd := []string{ampBin, "run", "--mode", "chat"}
 	if sess.AmplifierSessionID != "" {
 		ampCmd = append(ampCmd, "--resume", sess.AmplifierSessionID)
@@ -186,18 +199,6 @@ func (s *Server) spawnTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 	s.workspaceStore.UpdateSessionStatus(r.Context(), sid, "active", &processID) //nolint:errcheck
 	writeJSON(w, http.StatusOK, map[string]string{"processId": processID})
-
-	// For new sessions: scan PTY stdout for "Session ID: <uuid>" in the startup banner.
-	// Fires within ~1s — no polling, no filesystem scan, no delay.
-	if sess.AmplifierSessionID == "" {
-		s.ptyMgr.ScanForSessionID(processID, func(ampID string) {
-			ctx := context.Background()
-			if err := s.workspaceStore.SetAmplifierSessionID(ctx, sid, ampID); err == nil {
-				slog.Info("amplifier session ID captured from banner",
-					"loom_session", sid, "amp_session", ampID)
-			}
-		})
-	}
 
 	// Watch for the amplifier auto-name and rename the loom session when it fires.
 	if _, loaded := s.watchedSessions.LoadOrStore(sid, struct{}{}); !loaded {
