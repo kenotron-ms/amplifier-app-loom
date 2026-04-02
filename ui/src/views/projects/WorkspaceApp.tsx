@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import {
   Project, Session,
@@ -20,7 +21,8 @@ export default function WorkspaceApp() {
   // Grove pattern: keep ALL seen processIds in DOM, show active via visibility:hidden
   const [liveProcessIds, setLiveProcessIds] = useState<Set<string>>(new Set())
   const [activeProcessId, setActiveProcessId] = useState<string | null>(null)
-  const [rightPanel, setRightPanel] = useState<'files' | 'stats'>('files')
+  const [rightPanel, setRightPanel]     = useState<'files' | 'stats'>('files')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   // New Project modal
   const [showNewProject, setShowNewProject] = useState(false)
@@ -233,6 +235,16 @@ export default function WorkspaceApp() {
             <div className="flex items-center gap-2 px-3 py-1.5 bg-[#161b22] border-b border-[#30363d] shrink-0">
               <span className="text-xs text-[#e6edf3] font-medium">{activeProject.name}</span>
               <span className="text-xs text-[#8b949e]">/ {activeSession.name}</span>
+              <button
+                onClick={() => setSidebarCollapsed(c => !c)}
+                className="ml-auto text-[#484f58] hover:text-[#8b949e] transition-colors"
+                title={sidebarCollapsed ? 'Show panel' : 'Hide panel'}
+              >
+                {sidebarCollapsed
+                  ? <PanelRightOpen className="w-3.5 h-3.5" />
+                  : <PanelRightClose className="w-3.5 h-3.5" />
+                }
+              </button>
             </div>
           )}
 
@@ -284,7 +296,7 @@ export default function WorkspaceApp() {
           </div>
         </Panel>
 
-        {activeProject && activeSession && (
+        {activeProject && activeSession && !sidebarCollapsed && (
           <>
             <PanelResizeHandle className="w-1 bg-[#30363d] hover:bg-[#58a6ff] transition-colors cursor-col-resize" />
             <Panel defaultSize={40} minSize={20} className="flex flex-col overflow-hidden">
