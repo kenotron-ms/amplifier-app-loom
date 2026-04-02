@@ -51,7 +51,11 @@ export function useTerminalSocket({ processId, onData, onExit }: Props) {
       if (wsRef.current) return
 
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const url = `${proto}//${window.location.host}/api/terminal/${processId}`
+      // ?fresh=1 tells the server to replay its ring buffer before going live.
+      // reconnectAttempts === 0 means this is the first connect for this page
+      // session (a fresh tab load), not a backoff reconnect after a drop.
+      const freshParam = reconnectAttempts.current === 0 ? '?fresh=1' : ''
+      const url = `${proto}//${window.location.host}/api/terminal/${processId}${freshParam}`
 
       const ws = new WebSocket(url)
       ws.binaryType = 'arraybuffer'

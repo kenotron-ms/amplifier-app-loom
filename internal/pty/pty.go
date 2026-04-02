@@ -16,25 +16,39 @@ import (
 )
 
 // reAmpSessionID matches amplifier's startup banner line:
-//   │ Session ID: 65ab7311-33cd-4526-9f5f-ebe6fd40a718  │
+//
+//	│ Session ID: 65ab7311-33cd-4526-9f5f-ebe6fd40a718  │
 var reAmpSessionID = regexp.MustCompile(`Session ID:\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})`)
+
+// outBufMax is the size of the server-side PTY output ring buffer per process.
+// Matches the client-side ring buffer (window.__terminalRegistry.buffers).
+const outBufMax = 256 * 1024 // 256 KB
 
 // Process wraps a running PTY process.
 type Process struct {
-	ID  string     // stable UUID — safe to use in URLs
-	Key string     // deduplication key (projectID::worktreePath)
-	ptm *os.File   // PTY master fd
+	ID  string   // stable UUID — safe to use in URLs
+	Key string   // deduplication key (projectID::worktreePath)
+	ptm *os.File // PTY master fd
 	cmd *exec.Cmd
 }
 
 // Manager holds active PTY processes indexed by two keys:
-//   procs: UUID id → *Process   (for WebSocket lookup by processId)
-//   keys:  key    → UUID id     (for deduplication: same worktree = same process)
+//
+//	procs: UUID id → *Process   (for WebSocket lookup by processId)
+//	keys:  key    → UUID id     (for deduplication: same worktree = same process)
+//
+// outBufs is a server-side rolling ring buffer of raw PTY output, keyed by
+// process UUID.  It lets a fresh browser tab replay terminal history after a
+// page reload — the client sends ?fresh=1 on the WebSocket URL and the server
+// replays the buffer before starting the live stream.
 type Manager struct {
 	mu          sync.Mutex
 	procs       map[string]*Process // UUID id → process
 	keys        map[string]string   // key → UUID id
-	outputSinks sync.Map            // processID → []func([]byte)  (output tap callbacks)
+	outputSinks sync.Map            // processID → func([]byte)
+
+	outBufsMu sync.RWMutex
+	outBufs   map[string][]byte // processID → rolling output bytes
 }
 
 // OnOutput registers a callback that receives every chunk of PTY output for
@@ -66,9 +80,32 @@ func (m *Manager) ScanForSessionID(processID string, onFound func(ampSessionID s
 // NewManager returns an initialised Manager.
 func NewManager() *Manager {
 	return &Manager{
-		procs: make(map[string]*Process),
-		keys:  make(map[string]string),
+		procs:   make(map[string]*Process),
+		keys:    make(map[string]string),
+		outBufs: make(map[string][]byte),
 	}
+}
+
+// appendOutBuf appends data to the rolling ring buffer for processID,
+// trimming from the front if it exceeds outBufMax.
+func (m *Manager) appendOutBuf(processID string, data []byte) {
+	m.outBufsMu.Lock()
+	buf := append(m.outBufs[processID], data...)
+	if len(buf) > outBufMax {
+		buf = buf[len(buf)-outBufMax:]
+	}
+	m.outBufs[processID] = buf
+	m.outBufsMu.Unlock()
+}
+
+// snapshotOutBuf returns a copy of the current ring buffer for processID.
+func (m *Manager) snapshotOutBuf(processID string) []byte {
+	m.outBufsMu.RLock()
+	raw := m.outBufs[processID]
+	snap := make([]byte, len(raw))
+	copy(snap, raw)
+	m.outBufsMu.RUnlock()
+	return snap
 }
 
 // Spawn starts a PTY process for key in workDir running argv.
@@ -100,13 +137,17 @@ func (m *Manager) Spawn(key, workDir string, argv []string) (string, error) {
 	m.procs[id] = proc
 	m.keys[key] = id
 
-	// Reap when process exits naturally.
+	// Reap when process exits naturally; clear ring buffer when it does.
 	go func() {
 		cmd.Wait() //nolint:errcheck
 		m.mu.Lock()
 		delete(m.procs, id)
 		delete(m.keys, key)
 		m.mu.Unlock()
+		// Clear the output buffer — the process is gone, no point keeping history.
+		m.outBufsMu.Lock()
+		delete(m.outBufs, id)
+		m.outBufsMu.Unlock()
 	}()
 
 	return id, nil
@@ -157,6 +198,14 @@ var upgrader = websocket.Upgrader{
 
 // ServeWS upgrades the HTTP connection to WebSocket and bidirectionally
 // bridges it to the PTY identified by processID (UUID). Blocks until closed.
+//
+// Query parameters:
+//
+//	?fresh=1  — client is a fresh page load (tab reopen). The server sends
+//	            the ring buffer as the first WS message so the terminal is
+//	            restored to its pre-reload state.
+//	            Omit (or ?fresh=0) for reconnects within the same page
+//	            session to avoid duplicating output already in the client.
 func (m *Manager) ServeWS(w http.ResponseWriter, r *http.Request, processID string) {
 	m.mu.Lock()
 	p, ok := m.procs[processID]
@@ -175,8 +224,17 @@ func (m *Manager) ServeWS(w http.ResponseWriter, r *http.Request, processID stri
 	}
 	defer conn.Close()
 
+	// Replay ring buffer for fresh page loads (?fresh=1).
+	// Reconnects skip this to avoid duplicating output already in the client.
+	if r.URL.Query().Get("fresh") == "1" {
+		if snap := m.snapshotOutBuf(processID); len(snap) > 0 {
+			conn.WriteMessage(websocket.BinaryMessage, snap) //nolint:errcheck
+		}
+	}
+
 	// PTY → WebSocket (goroutine)
-	// Each chunk is also forwarded to any registered output scanners (e.g. session-ID capture).
+	// Every chunk is also appended to the ring buffer and forwarded to any
+	// registered output scanners (e.g. session-ID capture).
 	go func() {
 		buf := make([]byte, 4096)
 		for {
@@ -185,7 +243,11 @@ func (m *Manager) ServeWS(w http.ResponseWriter, r *http.Request, processID stri
 				return
 			}
 			chunk := buf[:n]
-			// Tap: notify any registered output scanners
+
+			// Maintain server-side ring buffer (for fresh-connect replay).
+			m.appendOutBuf(processID, chunk)
+
+			// Tap: notify any registered output scanners.
 			if cb, ok := m.outputSinks.Load(processID); ok {
 				cb.(func([]byte))(chunk)
 			}
