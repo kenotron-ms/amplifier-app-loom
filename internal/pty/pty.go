@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -108,6 +110,61 @@ func (m *Manager) snapshotOutBuf(processID string) []byte {
 	return snap
 }
 
+// ptyEnv builds the environment for a spawned PTY process.
+//
+// The loom daemon runs as a launchd/systemd service, which inherits a minimal
+// PATH (/usr/bin:/bin:/usr/sbin:/sbin).  User-installed tools — Homebrew, nvm,
+// pyenv, gh, node, uv, etc. — live in locations that are never in that PATH.
+// We prepend the common install prefixes so tools work inside the terminal just
+// as they would in the user's interactive shell session.
+func ptyEnv() []string {
+	env := os.Environ()
+
+	// Find and enrich PATH.
+	home, _ := os.UserHomeDir()
+	additions := []string{
+		filepath.Join(home, ".local", "bin"),       // uv, pip --user, cargo-installed tools
+		filepath.Join(home, "go", "bin"),            // go install targets
+		filepath.Join(home, ".cargo", "bin"),        // Rust / cargo tools
+		"/opt/homebrew/bin",                         // Homebrew on Apple Silicon
+		"/opt/homebrew/sbin",
+		"/usr/local/bin",                            // Homebrew on Intel + manual installs
+		"/usr/local/sbin",
+		"/home/linuxbrew/.linuxbrew/bin",            // Homebrew on Linux
+	}
+
+	pathIdx := -1
+	for i, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			pathIdx = i
+			break
+		}
+	}
+	current := ""
+	if pathIdx >= 0 {
+		current = strings.TrimPrefix(env[pathIdx], "PATH=")
+	}
+
+	var extra []string
+	for _, a := range additions {
+		if !strings.Contains(current, a) {
+			extra = append(extra, a)
+		}
+	}
+	if len(extra) > 0 {
+		newPath := "PATH=" + strings.Join(extra, ":") + ":" + current
+		if pathIdx >= 0 {
+			env[pathIdx] = newPath
+		} else {
+			env = append(env, newPath)
+		}
+	}
+
+	// Ensure TERM is set for proper ANSI rendering.
+	env = append(env, "TERM=xterm-256color")
+	return env
+}
+
 // Spawn starts a PTY process for key in workDir running argv.
 // Returns a clean UUID processId safe for use in URLs.
 // If a live process already exists for this key, its ID is returned (deduplication).
@@ -125,7 +182,7 @@ func (m *Manager) Spawn(key, workDir string, argv []string) (string, error) {
 
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = workDir
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	cmd.Env = ptyEnv()
 
 	ptm, err := creackpty.Start(cmd)
 	if err != nil {
