@@ -297,6 +297,13 @@ func (s *Server) watchSession(sessionID, worktreePath string) {
 		if err != nil || meta == nil || meta.Name == "" || meta.Name == sess.Name {
 			continue
 		}
+		// Only accept this name if the metadata belongs to *this* loom session's
+		// amplifier session — not some other session that happened to be modified most
+		// recently.  Without this guard every watcher renames its session whenever
+		// any session in the project gets a new name.
+		if sess.AmplifierSessionID != "" && meta.SessionID != sess.AmplifierSessionID {
+			continue
+		}
 		if err := s.workspaceStore.RenameSession(ctx, sessionID, meta.Name); err == nil {
 			slog.Info("session renamed from amplifier hook",
 				"session", sessionID, "name", meta.Name)
