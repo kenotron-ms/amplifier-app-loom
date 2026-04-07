@@ -9,6 +9,7 @@ import FileViewer from './FileViewer'
 import SessionStatsPanel from './SessionStats'
 import { TerminalPanel } from './terminal/TerminalPanel'
 import DirectoryBrowserModal from '../../components/DirectoryBrowserModal'
+import { ProjectSettingsPanel } from './ProjectSettingsPanel'
 
 // ── Status dot ──────────────────────────────────────────────────────────────
 
@@ -123,7 +124,7 @@ export default function WorkspaceApp() {
   // Grove pattern: keep ALL seen processIds in DOM, show active via visibility:hidden
   const [liveProcessIds, setLiveProcessIds] = useState<Set<string>>(new Set())
   const [activeProcessId, setActiveProcessId] = useState<string | null>(null)
-  const [rightPanel, setRightPanel]   = useState<'files' | 'app' | 'analysis'>('files')
+  const [rightPanel, setRightPanel]   = useState<'files' | 'app' | 'analysis' | 'settings'>('files')
   const [rightHidden, setRightHidden] = useState(false)
 
   // New Project modal
@@ -561,7 +562,7 @@ export default function WorkspaceApp() {
                 flexShrink: 0,
                 gap: 0,
               }}>
-                {(['files', 'app', 'analysis'] as const).map(tab => (
+                {(['files', 'app', 'analysis', 'settings'] as const).map(tab => (
                   <button
                     key={tab}
                     onClick={() => setRightPanel(tab)}
@@ -597,6 +598,7 @@ export default function WorkspaceApp() {
               {rightPanel === 'files'    && <FileViewer projectId={activeProject.id} sessionId={activeSession.id} />}
               {rightPanel === 'app'      && <AppPreviewPanel />}
               {rightPanel === 'analysis' && <SessionStatsPanel project={activeProject} session={activeSession} />}
+              {rightPanel === 'settings' && <ProjectSettingsPanel projectId={activeProject.id} />}
             </Panel>
           </>
         )}
