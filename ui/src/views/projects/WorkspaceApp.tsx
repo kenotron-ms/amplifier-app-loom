@@ -461,7 +461,7 @@ export default function WorkspaceApp() {
             </div>
           ) : (
             <PaneTitle>
-              {activeProject ? activeProject.name : 'Canvas'}
+              {activeProject ? activeProject.name : 'Loom'}
             </PaneTitle>
           )}
 
@@ -501,10 +501,10 @@ export default function WorkspaceApp() {
                 ) : (
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10, fontStyle: 'italic', letterSpacing: '-0.02em' }}>
-                      Welcome to Canvas
+                      Welcome to Loom
                     </div>
                     <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24, maxWidth: 340, lineHeight: 1.5 }}>
-                      Amplifier is a powerful engine with no cockpit. Canvas is the cockpit.
+                      Amplifier is a powerful engine with no cockpit. Loom is the cockpit.
                     </div>
                     <button
                       onClick={() => setShowNewProject(true)}

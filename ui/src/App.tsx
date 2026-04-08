@@ -14,12 +14,24 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'bundles',  label: 'Bundles' },
 ]
 
-// Canvas two-square logo mark
-function CanvasLogo() {
+// Loom woven-grid logo mark
+function LoomLogo() {
   return (
-    <svg width="22" height="22" viewBox="107 107 298 298" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', flexShrink: 0 }}>
-      <rect x="116" y="116" width="240" height="240" rx="28" stroke="#1C1A16" strokeWidth="18" fill="none"/>
-      <rect x="156" y="156" width="240" height="240" rx="28" stroke="#C4784A" strokeWidth="18" fill="none"/>
+    <svg width="22" height="22" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', flexShrink: 0 }}>
+      <rect width="36" height="36" rx="7" fill="#1C1A16"/>
+      {/* Horizontal stripes (teal) */}
+      <rect x="4" y="4"  width="28" height="6" fill="#5A7E85"/>
+      <rect x="4" y="15" width="28" height="6" fill="#5A7E85"/>
+      <rect x="4" y="26" width="28" height="6" fill="#5A7E85"/>
+      {/* Vertical stripes (mustard) on top */}
+      <rect x="4"  y="4" width="6" height="28" fill="#D09D59"/>
+      <rect x="15" y="4" width="6" height="28" fill="#D09D59"/>
+      <rect x="26" y="4" width="6" height="28" fill="#D09D59"/>
+      {/* Teal back on top at corners — weave pattern */}
+      <rect x="4"  y="4"  width="6" height="6" fill="#5A7E85"/>
+      <rect x="26" y="4"  width="6" height="6" fill="#5A7E85"/>
+      <rect x="4"  y="26" width="6" height="6" fill="#5A7E85"/>
+      <rect x="26" y="26" width="6" height="6" fill="#5A7E85"/>
     </svg>
   )
 }
@@ -62,9 +74,9 @@ export default function App() {
       >
         {/* Logo + brand */}
         <div className="flex items-center gap-1.5 mr-4">
-          <CanvasLogo />
+          <LoomLogo />
           <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-            Canvas
+            Loom
           </span>
         </div>
 
