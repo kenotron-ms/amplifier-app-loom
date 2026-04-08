@@ -65,8 +65,19 @@ func PrepareSession(projectPath string) (string, error) {
 // resolvePython finds a usable Python 3 interpreter.
 // macOS GUI apps and launchd services run with a stripped PATH
 // that often doesn't include ~/.local/bin or /opt/homebrew/bin.
+//
+// Priority: uv amplifier tool env first — that Python always has
+// amplifier_app_cli installed. System Python on PATH may not.
 func resolvePython() (string, error) {
-	// Standard PATH first — works in shell-launched contexts
+	home, _ := os.UserHomeDir()
+
+	// uv tool environment for amplifier — definitive source of amplifier_app_cli
+	uvAmplifierPython := filepath.Join(home, ".local", "share", "uv", "tools", "amplifier", "bin", "python")
+	if _, err := os.Stat(uvAmplifierPython); err == nil {
+		return uvAmplifierPython, nil
+	}
+
+	// Standard PATH next — works in shell-launched contexts
 	for _, name := range []string{"python3", "python"} {
 		if p, err := exec.LookPath(name); err == nil {
 			return p, nil
@@ -74,7 +85,6 @@ func resolvePython() (string, error) {
 	}
 
 	// Probe common install locations
-	home, _ := os.UserHomeDir()
 	candidates := []string{
 		filepath.Join(home, ".local", "bin", "python3"),
 		"/opt/homebrew/bin/python3",
