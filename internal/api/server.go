@@ -24,6 +24,7 @@ type Server struct {
 	store       store.Store
 	scheduler   *scheduler.Scheduler
 	broadcaster *scheduler.Broadcaster
+	focusClients *focusRegistry
 	queue       *queue.BoundedQueue
 	startedAt   time.Time
 	nlClient    nl.NLClient
@@ -40,12 +41,13 @@ type Server struct {
 
 func NewServer(cfg *config.Config, s store.Store, sched *scheduler.Scheduler, q *queue.BoundedQueue, startedAt time.Time, b *scheduler.Broadcaster) *Server {
 	srv := &Server{
-		cfg:         cfg,
-		store:       s,
-		scheduler:   sched,
-		broadcaster: b,
-		queue:       q,
-		startedAt:   startedAt,
+		cfg:          cfg,
+		store:        s,
+		scheduler:    sched,
+		broadcaster:  b,
+		focusClients: newFocusRegistry(),
+		queue:        q,
+		startedAt:    startedAt,
 	}
 	srv.nlClient = nl.NewClientFromConfig(cfg, s, sched)
 	return srv
@@ -200,6 +202,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Feedback → files a GitHub issue via gh CLI
 	mux.HandleFunc("POST /api/feedback", s.createFeedback)
+
+	// Window focus — lets the tray bring an existing tab forward instead of opening a new one
+	mux.HandleFunc("GET /api/ui/focus", s.focusStream)
+	mux.HandleFunc("POST /api/ui/focus", s.focusTrigger)
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
