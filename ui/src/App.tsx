@@ -4,6 +4,7 @@ import JobsView from './views/jobs'
 import MirrorView from './views/mirror'
 import BundlesView from './views/bundles'
 import FeedbackModal from './components/FeedbackModal'
+import { useSingleInstance } from './hooks/useSingleInstance'
 
 type Tab = 'projects' | 'jobs' | 'mirror' | 'bundles'
 
@@ -56,9 +57,51 @@ function SettingsIcon() {
   )
 }
 
+function DuplicateTabScreen() {
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        background: 'var(--bg-page)',
+        gap: 12,
+      }}
+    >
+      <LoomLogo />
+      <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', margin: 0 }}>
+        Loom is already open
+      </p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, textAlign: 'center', maxWidth: 260 }}>
+        Another dashboard tab is already running.<br />
+        Switch to it or close this tab.
+      </p>
+      <button
+        onClick={() => window.close()}
+        style={{
+          marginTop: 4,
+          padding: '5px 14px',
+          fontSize: 12,
+          fontWeight: 500,
+          color: 'var(--text-primary)',
+          background: 'var(--bg-input)',
+          border: '1px solid var(--border)',
+          borderRadius: 5,
+          cursor: 'pointer',
+        }}
+      >
+        Close this tab
+      </button>
+    </div>
+  )
+}
+
 export default function App() {
+  const isDuplicate                     = useSingleInstance()
   const [active, setActive]             = useState<Tab>('projects')
   const [showFeedback, setShowFeedback] = useState(false)
+
+  if (isDuplicate) return <DuplicateTabScreen />
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg-page)' }}>
