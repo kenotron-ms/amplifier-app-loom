@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/kardianos/service"
@@ -30,8 +31,22 @@ import (
 	"github.com/ms/amplifier-app-loom/internal/store"
 )
 
+// isAmplifierConnected checks whether the Amplifier loom bundle is registered.
+// Returns true (nothing to show) if amplifier is not installed or if the check errors out.
+func isAmplifierConnected() bool {
+	amplifierPath, err := exec.LookPath("amplifier")
+	if err != nil {
+		return true // amplifier not installed — nothing to connect
+	}
+	out, err := exec.Command(amplifierPath, "bundle", "list").Output()
+	if err != nil {
+		return true // can't check — don't surface a spurious warning
+	}
+	return strings.Contains(string(out), "loom")
+}
+
 // wizardGoMessage is called from ObjC when JS posts to window.webkit.messageHandlers.agent.
-// Messages: setAnthropicKey, setOpenAIKey, openSettings, installService, done.
+// Messages: setAnthropicKey, setOpenAIKey, openSettings, installService, connectAmplifier, done.
 //
 //export wizardGoMessage
 func wizardGoMessage(cAction *C.char, cPayload *C.char) {
@@ -56,6 +71,8 @@ func wizardGoMessage(cAction *C.char, cPayload *C.char) {
 	case "installService":
 		// payload is "user" or "system"
 		go doInstallService(payload, s)
+	case "connectAmplifier":
+		go doConnectAmplifier(s)
 	case "done":
 		go handleDone(s)
 	}
@@ -86,15 +103,31 @@ func handleDone(s *state) {
 	openAIKey := s.openAIKey
 	s.mu.Unlock()
 
-	// Try API path first — avoids DB lock contention when daemon is already running.
-	// Falls back to direct DB access for fresh installs where no daemon is running yet.
-	if trySaveKeysViaAPI(anthropicKey, openAIKey) {
-		slog.Info("onboarding: saved keys via daemon API")
-		closeWizard(s)
-		return
+	// Infer which provider the user configured so the daemon initialises the right
+	// AI client.  Default to "anthropic"; switch to "openai" only when the OpenAI
+	// key is the sole entry — avoids the silent nil-client bug for OpenAI-only users.
+	aiProvider := "anthropic"
+	if anthropicKey == "" && openAIKey != "" {
+		aiProvider = "openai"
 	}
 
-	// Daemon not running — safe to open DB directly.
+	// Try API path first, with short retries to bridge the startup race window:
+	// doInstallService fires serviceInstalled as soon as launchctl registers the
+	// plist, but the daemon may still be binding its port when Done is clicked.
+	// Each attempt times out in 1s (plenty for localhost); 3 attempts ≈ 5s max.
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Second)
+		}
+		if trySaveKeysViaAPI(anthropicKey, openAIKey, aiProvider) {
+			slog.Info("onboarding: saved keys via daemon API")
+			closeWizard(s)
+			return
+		}
+	}
+
+	// Daemon not reachable — write directly to DB.
+	// Only safe when the daemon does NOT hold the BoltDB file lock.
 	st, err := store.Open(platform.DBPath())
 	if err != nil {
 		pushInstallError("Failed to open database: " + err.Error())
@@ -108,9 +141,12 @@ func handleDone(s *state) {
 		return
 	}
 
-	// Persist the API keys snapshotted above.
 	cfg.AnthropicKey = anthropicKey
 	cfg.OpenAIKey = openAIKey
+	// Set provider only if not already configured — never downgrade an existing choice.
+	if cfg.AIProvider == "" {
+		cfg.AIProvider = aiProvider
+	}
 
 	// Capture user context (HomeDir, Shell, UID) — always refresh on completion.
 	if uc := config.CaptureUserContext(); uc != nil {
@@ -128,15 +164,34 @@ func handleDone(s *state) {
 	closeWizard(s)
 }
 
+// doConnectAmplifier registers the loom bundle with the Amplifier CLI.
+func doConnectAmplifier(s *state) {
+	amplifierPath, err := exec.LookPath("amplifier")
+	if err != nil {
+		pushInstallError("Amplifier CLI not found in PATH")
+		return
+	}
+	out, err := exec.Command(amplifierPath, "bundle", "add",
+		"git+https://github.com/kenotron-ms/amplifier-app-loom@main", "--app").CombinedOutput()
+	if err != nil {
+		pushInstallError("bundle add failed: " + strings.TrimSpace(string(out)))
+		return
+	}
+	slog.Info("onboarding: amplifier bundle registered")
+	pushJS(`window.dispatchEvent(new CustomEvent('amplifierConnected'))`)
+}
+
 // trySaveKeysViaAPI attempts to persist API keys through the running daemon's
 // HTTP endpoint. Returns true if the daemon is reachable and responds 2xx.
 // Using the HTTP path avoids BoltDB exclusive-lock contention: the daemon owns
 // the write lock while it is running, so opening the DB file directly from the
 // tray/wizard process will time out.
-func trySaveKeysViaAPI(anthropicKey, openAIKey string) bool {
-	body, err := json.Marshal(map[string]string{
-		"anthropicKey": anthropicKey,
-		"openAIKey":    openAIKey,
+func trySaveKeysViaAPI(anthropicKey, openAIKey, aiProvider string) bool {
+	body, err := json.Marshal(map[string]interface{}{
+		"anthropicKey":       anthropicKey,
+		"openAIKey":          openAIKey,
+		"aiProvider":         aiProvider,
+		"onboardingComplete": true,
 	})
 	if err != nil {
 		return false
@@ -147,7 +202,7 @@ func trySaveKeysViaAPI(anthropicKey, openAIKey string) bool {
 		return false
 	}
 	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 3 * time.Second}
+	client := &http.Client{Timeout: time.Second} // 1s is ample for localhost
 	resp, err := client.Do(req)
 	if err != nil {
 		// Daemon not reachable — this is expected on fresh installs.

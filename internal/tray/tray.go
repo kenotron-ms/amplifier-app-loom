@@ -26,11 +26,6 @@ import (
 	"github.com/ms/amplifier-app-loom/internal/updater"
 )
 
-type healthIssue struct {
-	msg     string // shown in menu
-	fixKind string // "apikey" | "fda" | "service" | "cli" | "amplifier"
-}
-
 // Run launches the system tray app. Blocks until the user quits.
 // Must be called from the main goroutine.
 func Run(port int) error {
@@ -51,84 +46,14 @@ func isDaemonRunning(port int) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-func isCLIInPath() bool {
-	home, _ := os.UserHomeDir()
-	for _, p := range []string{
-		"/usr/local/bin/loom",
-		filepath.Join(home, ".local", "bin", "loom"),
-	} {
-		if _, err := os.Stat(p); err == nil {
-			return true
-		}
-	}
-	return false
-}
-
-func isAmplifierConnected() bool {
-	amplifierPath, err := exec.LookPath("amplifier")
-	if err != nil {
-		return true // amplifier not installed — nothing to connect
-	}
-	out, err := exec.Command(amplifierPath, "bundle", "list").Output()
-	if err != nil {
-		return true // can't check — don't surface a spurious warning
-	}
-	return strings.Contains(string(out), "loom")
-}
-
-func checkHealth(port int) []healthIssue {
-	var issues []healthIssue
-
-	s, err := store.Open(platform.DBPath())
-	if err == nil {
-		if cfg, err := s.GetConfig(context.Background()); err == nil {
-			if cfg.AnthropicKey == "" {
-				issues = append(issues, healthIssue{"Anthropic API key missing", "apikey"})
-			}
-		}
-		s.Close()
-	}
-
-	if !onboarding.CheckFDA() {
-		issues = append(issues, healthIssue{"Full Disk Access missing", "fda"})
-	}
-
-	if !isServiceInstalled() && !isDaemonRunning(port) {
-		issues = append(issues, healthIssue{"Background service not installed", "service"})
-	}
-
-	// Service running check (HTTP 200); treat connection refused as dead service.
-	url := fmt.Sprintf("http://localhost:%d/api/status", port)
-	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		issues = append(issues, healthIssue{"Service not responding", "service"})
-	} else {
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			issues = append(issues, healthIssue{"Service not responding", "service"})
-		}
-	}
-
-	if !isCLIInPath() {
-		issues = append(issues, healthIssue{"CLI not in terminal PATH", "cli"})
-	}
-
-	if !isAmplifierConnected() {
-		issues = append(issues, healthIssue{"Amplifier not connected", "amplifier"})
-	}
-
-	return issues
-}
-
 func onReady(port int) {
-	// ── Bundle self-repair ────────────────────────────────────────────────────────────────────────
+	// ── Bundle self-repair ──────────────────────────────────────────────────
 	// Ensures Loom.icns is present in Contents/Resources/ even on installs
 	// that predate the icon or were updated via the binary-only updater.
 	repairBundle()
 
-	// ── Onboarding check (macOS .app launch only) ─────────────────────────
-	// Shows the first-run wizard if API key, UserContext, or FDA are missing.
+	// ── Onboarding check (macOS .app launch only) ───────────────────────────
+	// Shows the first-run wizard if API key or background service are missing.
 	if ost, err := store.Open(platform.DBPath()); err != nil {
 		slog.Warn("tray: onboarding check: cannot open store", "err", err)
 	} else {
@@ -142,69 +67,51 @@ func onReady(port int) {
 		ost.Close()
 	}
 
-	// Step 1: tray icon appears immediately.
 	icon := makeIcon()
 	systray.SetTemplateIcon(icon, icon)
 	systray.SetTooltip("loom")
 
-	// Step 3: show setup prompts for anything not yet configured.
-	// Service prompt: only if plist missing AND daemon not already running.
-	var mSetup *systray.MenuItem
-	if !isServiceInstalled() && !isDaemonRunning(port) {
-		mSetup = systray.AddMenuItem("⚙  Set up background service…", "Install loom so it starts automatically")
-		systray.AddSeparator()
-	}
-
-	// ── Status section ──────────────────────────────────────────────────────────────────────────────────────────────────
+	// ── Status ──────────────────────────────────────────────────────────────
 	mStatus := systray.AddMenuItem("⬤  Checking…", "Daemon status")
 	mStatus.Disable()
 	mDetails := systray.AddMenuItem("", "Jobs / queue details")
 	mDetails.Disable()
 	mDetails.Hide()
 
-	// ── Health indicator (hidden until first check fires) ─────────────────
-	mActionRequired := systray.AddMenuItem("⚠  Action Required", "One or more setup issues require attention")
-	mActionRequired.Hide()
-	mFixAPIKey := mActionRequired.AddSubMenuItem("Anthropic API key missing   Fix →", "Open settings to add API key")
-	mFixFDA := mActionRequired.AddSubMenuItem("Full Disk Access missing     Fix →", "Open System Settings")
-	mFixService := mActionRequired.AddSubMenuItem("Service not installed         Fix →", "Install background service")
-	mFixCLI := mActionRequired.AddSubMenuItem("CLI not in terminal PATH     Fix →", "Add loom to PATH")
-	mFixAmplifier := mActionRequired.AddSubMenuItem("Amplifier not connected      Fix →", "Register Amplifier bundle")
-	mFixAPIKey.Hide()
-	mFixFDA.Hide()
-	mFixService.Hide()
-	mFixCLI.Hide()
-	mFixAmplifier.Hide()
-
 	systray.AddSeparator()
 
-	// ── Quick actions ───────────────────────────────────────────────────────────────────────────────────────────────────
-	mOpenUI := systray.AddMenuItem("Open Web UI", fmt.Sprintf("http://localhost:%d", port))
+	// ── Primary actions ─────────────────────────────────────────────────────
+	mOpenUI := systray.AddMenuItem("Open Dashboard", fmt.Sprintf("http://localhost:%d", port))
 	systray.AddSeparator()
-	mStart := systray.AddMenuItem("Start Daemon", "")
-	mStop := systray.AddMenuItem("Stop Daemon", "")
-	mPause := systray.AddMenuItem("Pause Scheduling", "")
-	mResume := systray.AddMenuItem("Resume Scheduling", "")
+	mStop := systray.AddMenuItem("Stop Service", "Stop the background daemon")
+	mStart := systray.AddMenuItem("Start Service", "Start the background daemon")
+	mPause := systray.AddMenuItem("Pause Jobs", "Suspend job scheduling (daemon keeps running)")
+	mResume := systray.AddMenuItem("Resume Jobs", "Resume job scheduling")
 	mResume.Hide()
 
 	systray.AddSeparator()
 
-	// ── Installation section ────────────────────────────────────────────────────────────────────────────────────────────
-	mInstall := systray.AddMenuItem("Install", "")
-	mInstallUser := mInstall.AddSubMenuItem("User (login items)", "Starts on login, no sudo needed")
-	mInstallSystem := mInstall.AddSubMenuItem("System (boot daemon)", "Starts at boot, requires sudo")
-	mUninstall := systray.AddMenuItem("Uninstall", "Remove installed service")
-
-	systray.AddSeparator()
+	// ── Updates ─────────────────────────────────────────────────────────────
 	mCheckUpdate := systray.AddMenuItem("Check for Updates", "Check GitHub for a newer release")
 	mUpdateAvail := systray.AddMenuItem("", "")
 	mUpdateAvail.Hide()
-	mQuit := systray.AddMenuItem("Quit Tray", "Close the tray app (daemon keeps running)")
 
-	// ── Background tasks ────────────────────────────────────────────────────────────────────────────────────────────────
-	// CLI install runs in background — may show an admin dialog, must not block.
+	systray.AddSeparator()
+
+	// ── Bottom section ───────────────────────────────────────────────────────
+	// API key warning: surfaces only when no key is configured.
+	// Clicking it opens the settings page to fix the issue.
+	mAPIKeyWarning := systray.AddMenuItem("⚠  API key not set — Open Settings", "Add an Anthropic or OpenAI key to enable AI jobs")
+	mAPIKeyWarning.Hide()
+	mUninstall := systray.AddMenuItem("Uninstall Loom…", "Remove the background service and close the tray")
+	mQuit := systray.AddMenuItem("Quit", "Close the tray app (service keeps running)")
+
+	// ── Background tasks ─────────────────────────────────────────────────────
+	// Symlinks the binary to /usr/local/bin once, silently, from .app context.
 	go installCLIIfNeeded()
 
+	// Status poller: updates the status line and Start/Stop/Pause/Resume
+	// visibility every 2 seconds.
 	go func() {
 		for {
 			updateStatus(port, mStatus, mDetails, mStart, mStop, mPause, mResume)
@@ -212,9 +119,7 @@ func onReady(port int) {
 		}
 	}()
 
-	// ── Auto-updater ──────────────────────────────────────────────────────────
-	// onChange runs from the updater's goroutine; systray menu ops are safe
-	// to call from any goroutine.
+	// ── Auto-updater ─────────────────────────────────────────────────────────
 	u := updater.New(api.Version, func(s updater.State, ver string) {
 		switch s {
 		case updater.StateDownloading:
@@ -240,8 +145,6 @@ func onReady(port int) {
 		}
 	})
 
-	// Check on startup (after a short delay so the tray init completes first),
-	// then every 4 hours.
 	go func() {
 		time.Sleep(5 * time.Second)
 		_ = u.CheckAndStage(context.Background())
@@ -253,75 +156,47 @@ func onReady(port int) {
 		}
 	}()
 
-	// Health check: starts after onboarding is done (poll OnboardingComplete).
-	// Runs every 30 seconds once active. Does NOT run concurrently with the wizard.
+	// ── API key health check ──────────────────────────────────────────────────
+	// Only surfaces the one issue users can act on directly from the tray:
+	// a missing API key.  Everything else (service install, FDA, CLI) is
+	// handled by the onboarding wizard when the app first launches.
 	go func() {
-		// Wait until onboarding is marked complete.
 		for {
-			time.Sleep(5 * time.Second)
+			time.Sleep(30 * time.Second)
 			hs, err := store.Open(platform.DBPath())
 			if err != nil {
 				continue
 			}
 			cfg, err := hs.GetConfig(context.Background())
 			hs.Close()
-			if err == nil && cfg.OnboardingComplete {
-				break
+			if err != nil {
+				continue
 			}
-		}
-		// 30-second health check loop.
-		for {
-			issues := checkHealth(port)
-			if len(issues) == 0 {
-				systray.SetTooltip("loom")
-				mActionRequired.Hide()
+			if cfg.AnthropicKey == "" && cfg.OpenAIKey == "" {
+				mAPIKeyWarning.Show()
+				systray.SetTooltip("loom ⚠ API key missing")
 			} else {
-				systray.SetTooltip("loom ⚠ action required")
-				mFixAPIKey.Hide()
-				mFixFDA.Hide()
-				mFixService.Hide()
-				mFixCLI.Hide()
-				mFixAmplifier.Hide()
-				for _, iss := range issues {
-					slog.Debug("tray: health issue detected", "msg", iss.msg, "kind", iss.fixKind)
-					switch iss.fixKind {
-					case "apikey":
-						mFixAPIKey.Show()
-					case "fda":
-						mFixFDA.Show()
-					case "service":
-						mFixService.Show()
-					case "cli":
-						mFixCLI.Show()
-					case "amplifier":
-						mFixAmplifier.Show()
-					}
-				}
-				mActionRequired.Show()
+				mAPIKeyWarning.Hide()
+				systray.SetTooltip("loom")
 			}
-			time.Sleep(30 * time.Second)
 		}
 	}()
 
-	// ── Event loop ──────────────────────────────────────────────────────────────────────────────────────────────────────
-	setupCh := make(chan struct{})
-	if mSetup != nil {
-		setupCh = mSetup.ClickedCh
-	}
-
+	// ── Event loop ───────────────────────────────────────────────────────────
 	for {
 		select {
-		case <-setupCh:
-			if runServiceInstallDialog() && mSetup != nil {
-				mSetup.Hide()
-				setupCh = make(chan struct{}) // disarm
-			}
-
 		case <-mOpenUI.ClickedCh:
 			openBrowser(fmt.Sprintf("http://localhost:%d", port))
 
 		case <-mStart.ClickedCh:
-			runServiceControl(internalsvc.LevelUser, "start")
+			// Handle the post-uninstall case: if the plist is gone, install
+			// (user-level login item) then start, rather than just start.
+			if !isServiceInstalled() {
+				captureAndSaveUserContext()
+				installService(internalsvc.LevelUser)
+			} else {
+				runServiceControl(internalsvc.LevelUser, "start")
+			}
 
 		case <-mStop.ClickedCh:
 			runServiceControl(internalsvc.LevelUser, "stop")
@@ -331,15 +206,6 @@ func onReady(port int) {
 
 		case <-mResume.ClickedCh:
 			daemonPost(port, "/api/daemon/resume")
-
-		case <-mInstallUser.ClickedCh:
-			installService(internalsvc.LevelUser)
-
-		case <-mInstallSystem.ClickedCh:
-			installService(internalsvc.LevelSystem)
-
-		case <-mUninstall.ClickedCh:
-			uninstallService()
 
 		case <-mCheckUpdate.ClickedCh:
 			mCheckUpdate.SetTitle("Checking…")
@@ -353,10 +219,6 @@ func onReady(port int) {
 		case <-mUpdateAvail.ClickedCh:
 			switch u.State() {
 			case updater.StateReady:
-				// Apply: stop service, swap binary, reinstall service.
-				// Then spawn the new tray as a completely fresh process (so it
-				// gets its own clean macOS window-server registration) and quit
-				// the old one.
 				go func() {
 					newExe, err := u.Apply()
 					if err != nil {
@@ -373,34 +235,18 @@ func onReady(port int) {
 					systray.Quit()
 				}()
 			case updater.StateFailed:
-				// Retry the check + download.
-				go func() {
-					_ = u.CheckAndStage(context.Background())
-				}()
+				go func() { _ = u.CheckAndStage(context.Background()) }()
 			}
 
-		case <-mFixAPIKey.ClickedCh:
+		case <-mAPIKeyWarning.ClickedCh:
 			openBrowser(fmt.Sprintf("http://localhost:%d/#/settings", port))
 
-		case <-mFixFDA.ClickedCh:
-			if ost, err := store.Open(platform.DBPath()); err != nil {
-				slog.Warn("tray: mFixFDA: cannot open store", "err", err)
-			} else {
-				onboarding.Show(ost, func() {
-					slog.Info("tray: FDA fix via health indicator complete")
-				})
-				ost.Close()
+		case <-mUninstall.ClickedCh:
+			if confirmUninstall() {
+				uninstallService()
+				systray.Quit()
+				return
 			}
-
-		case <-mFixService.ClickedCh:
-			captureAndSaveUserContext()
-			installService(internalsvc.LevelUser)
-
-		case <-mFixCLI.ClickedCh:
-			go installCLIIfNeeded()
-
-		case <-mFixAmplifier.ClickedCh:
-			go connectAmplifier()
 
 		case <-mQuit.ClickedCh:
 			systray.Quit()
@@ -421,67 +267,22 @@ func isServiceInstalled() bool {
 	return false
 }
 
-// runServiceInstallDialog shows the install dialog and performs the install.
-// Returns true if install succeeded.
-func runServiceInstallDialog() bool {
-	exePath, err := os.Executable()
-	if err != nil {
-		return false
-	}
-
-	level, ok := showInstallDialog()
-	if !ok {
-		return false // user cancelled
-	}
-
-	slog.Info("setup: installing daemon service", "level", level)
-
-	if level == internalsvc.LevelSystem {
-		script := fmt.Sprintf(
-			`do shell script "%s install --system" with administrator privileges`,
-			exePath,
-		)
-		if err := exec.Command("osascript", "-e", script).Run(); err != nil {
-			slog.Error("setup: system install failed", "err", err)
-			return false
-		}
-		captureAndSaveUserContext()
-		return true
-	}
-
-	svc, err := internalsvc.NewServiceForControl(internalsvc.LevelUser)
-	if err != nil {
-		return false
-	}
-	if err := service.Control(svc, "install"); err != nil {
-		slog.Error("setup: install failed", "err", err)
-		return false
-	}
-	_ = service.Control(svc, "start")
-	captureAndSaveUserContext()
-	return true
-}
-
-// showInstallDialog presents a native macOS dialog to choose install level.
-// Returns the chosen level and true, or false if cancelled.
-func showInstallDialog() (internalsvc.InstallLevel, bool) {
+// confirmUninstall shows a native macOS dialog asking the user to confirm.
+// Returns true only if the user clicked "Uninstall".
+func confirmUninstall() bool {
 	script := `tell application "System Events"
-	set choice to display dialog "Choose how Loom should run in the background:" ¬
-		buttons {"Cancel", "System (all users, starts at boot)", "Just for me (login item)"} ¬
-		default button "Just for me (login item)" ¬
-		with title "Loom Setup" ¬
+	set choice to display dialog "This will remove the Loom background service.\n\nThe tray will close. You can reinstall by launching the app again." ¬
+		buttons {"Cancel", "Uninstall"} ¬
+		default button "Cancel" ¬
+		with title "Uninstall Loom?" ¬
 		with icon caution
 	return button returned of choice
 end tell`
-
 	out, err := exec.Command("osascript", "-e", script).Output()
 	if err != nil {
-		return internalsvc.LevelUser, false
+		return false
 	}
-	if strings.HasPrefix(strings.TrimSpace(string(out)), "System") {
-		return internalsvc.LevelSystem, true
-	}
-	return internalsvc.LevelUser, true
+	return strings.TrimSpace(string(out)) == "Uninstall"
 }
 
 // installCLIIfNeeded symlinks the binary to /usr/local/bin when running from
@@ -527,22 +328,6 @@ func installCLIIfNeeded() {
 	}
 }
 
-// connectAmplifier registers the loom bundle as an Amplifier app bundle.
-func connectAmplifier() {
-	amplifierPath, err := exec.LookPath("amplifier")
-	if err != nil {
-		slog.Warn("tray: amplifier not found in PATH")
-		return
-	}
-	out, err := exec.Command(amplifierPath, "bundle", "add",
-		"git+https://github.com/kenotron-ms/amplifier-app-loom@main", "--app").CombinedOutput()
-	if err != nil {
-		slog.Warn("tray: amplifier bundle add failed", "err", err, "out", string(out))
-		return
-	}
-	slog.Info("tray: amplifier bundle registered")
-}
-
 // addToShellProfile appends a PATH export to shell rc files if not already present.
 func addToShellProfile(home, dir string) {
 	line := fmt.Sprintf("\nexport PATH=\"%s:$PATH\" # added by Loom\n", dir)
@@ -562,10 +347,11 @@ func addToShellProfile(home, dir string) {
 	}
 }
 
-// updateStatus polls the daemon and updates menu items accordingly.
+// updateStatus polls the daemon and updates the status line and
+// Start/Stop/Pause/Resume visibility.
 func updateStatus(port int, mStatus, mDetails, mStart, mStop, mPause, mResume *systray.MenuItem) {
 	url := fmt.Sprintf("http://localhost:%d/api/status", port)
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) //nolint:noctx
 	if err != nil {
 		mStatus.SetTitle("⬤  Offline")
 		mDetails.Hide()
@@ -599,11 +385,10 @@ func updateStatus(port int, mStatus, mDetails, mStart, mStop, mPause, mResume *s
 
 	if s.JobCount > 0 || s.ActiveRuns > 0 || s.QueueDepth > 0 {
 		mDetails.SetTitle(fmt.Sprintf("   %d jobs · %d running · %d queued", s.JobCount, s.ActiveRuns, s.QueueDepth))
-		mDetails.Show()
 	} else {
 		mDetails.SetTitle(fmt.Sprintf("   %d jobs", s.JobCount))
-		mDetails.Show()
 	}
+	mDetails.Show()
 
 	mStart.Hide()
 	mStop.Show()
@@ -678,7 +463,7 @@ func runServiceControl(level internalsvc.InstallLevel, action string) {
 
 func daemonPost(port int, path string) {
 	url := fmt.Sprintf("http://localhost:%d%s", port, path)
-	resp, err := http.Post(url, "application/json", nil)
+	resp, err := http.Post(url, "application/json", nil) //nolint:noctx
 	if err == nil {
 		resp.Body.Close()
 	}

@@ -52,7 +52,8 @@ export default function ChatView({ onResponse }: Props = {}) {
       if (err?.error === 'no_api_key') {
         setError('AI assistant not configured. Add your API key in Settings.')
       } else {
-        setError(err?.message ?? 'Something went wrong.')
+        // Backend always returns {error: "..."} — prefer that over the never-set .message field.
+        setError(err?.error ?? err?.message ?? 'Something went wrong.')
       }
       setMessages(prev => prev.filter(m => m.id !== userMsg.id))
     } finally {

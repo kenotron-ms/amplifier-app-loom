@@ -17,11 +17,12 @@ type settingsResponse struct {
 }
 
 type settingsUpdateRequest struct {
-	AIProvider     string `json:"aiProvider"`
-	AnthropicKey   string `json:"anthropicKey"`
-	AnthropicModel string `json:"anthropicModel"`
-	OpenAIKey      string `json:"openAIKey"`
-	OpenAIModel    string `json:"openAIModel"`
+	AIProvider         string `json:"aiProvider"`
+	AnthropicKey       string `json:"anthropicKey"`
+	AnthropicModel     string `json:"anthropicModel"`
+	OpenAIKey          string `json:"openAIKey"`
+	OpenAIModel        string `json:"openAIModel"`
+	OnboardingComplete bool   `json:"onboardingComplete"`
 }
 
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
@@ -65,6 +66,9 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.OpenAIModel != "" {
 		s.cfg.OpenAIModel = req.OpenAIModel
+	}
+	if req.OnboardingComplete {
+		s.cfg.OnboardingComplete = true
 	}
 
 	if err := s.store.SaveConfig(r.Context(), s.cfg); err != nil {

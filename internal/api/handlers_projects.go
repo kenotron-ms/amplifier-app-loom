@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -122,8 +123,8 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Auto-name: derive from git branch when no name is supplied.
-	// Eventually this will be replaced by amplifier's own session-naming hook —
-	// amplifier auto-names sessions based on conversation context (e.g. "Loom macOS App Icon & DMG").
+	// Amplifier's session-naming hook later replaces this with a context-aware
+	// name (e.g. "Loom macOS App Icon & DMG") once the user starts a conversation.
 	if req.Name == "" {
 		if out, err2 := exec.CommandContext(r.Context(),
 			"git", "-C", p.Path, "rev-parse", "--abbrev-ref", "HEAD",
@@ -134,6 +135,27 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 			req.Name = "main"
 		}
 	}
+
+	// Ensure uniqueness within the project: if an existing session already has
+	// this name, append a counter so tabs are always distinguishable before
+	// Amplifier's auto-naming hook fires.
+	if existing, err2 := s.workspaceStore.ListSessions(r.Context(), projectID); err2 == nil {
+		names := make(map[string]bool, len(existing))
+		for _, es := range existing {
+			names[es.Name] = true
+		}
+		if names[req.Name] {
+			base := req.Name
+			for i := 2; ; i++ {
+				candidate := fmt.Sprintf("%s %d", base, i)
+				if !names[candidate] {
+					req.Name = candidate
+					break
+				}
+			}
+		}
+	}
+
 	sess, err := s.workspaceStore.CreateSession(r.Context(), projectID, req.Name, p.Path)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -297,11 +319,12 @@ func (s *Server) watchSession(sessionID, worktreePath string) {
 		if err != nil || meta == nil || meta.Name == "" || meta.Name == sess.Name {
 			continue
 		}
-		// Only accept this name if the metadata belongs to *this* loom session's
-		// amplifier session — not some other session that happened to be modified most
-		// recently.  Without this guard every watcher renames its session whenever
-		// any session in the project gets a new name.
-		if sess.AmplifierSessionID != "" && meta.SessionID != sess.AmplifierSessionID {
+		// Only rename when we have a *confirmed positive match* — this session's
+		// AmplifierSessionID must be set and must equal the metadata's session ID.
+		// Using || (not &&) so that an empty AmplifierSessionID is also rejected:
+		//   && would short-circuit to false when ID=="", letting any external session
+		//   rename every empty-ID tab.  || ensures we skip unless both are satisfied.
+		if sess.AmplifierSessionID == "" || meta.SessionID != sess.AmplifierSessionID {
 			continue
 		}
 		if err := s.workspaceStore.RenameSession(ctx, sessionID, meta.Name); err == nil {

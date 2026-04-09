@@ -141,20 +141,31 @@ export default function WorkspaceApp() {
       .catch(console.error)
   }, [])
 
-  // Poll session names every 5s — picks up amplifier's auto-naming hook
+  // Poll session names every 5s — picks up amplifier's auto-naming hook.
+  // `cancelled` flag discards in-flight responses that arrive after a project
+  // switch, preventing stale data from overwriting the current project's sessions.
   useEffect(() => {
     if (!activeProject) return
+    const projectId = activeProject.id
+    let cancelled = false
+
     const id = setInterval(async () => {
-      const ss = await listSessions(activeProject.id).catch(() => null)
-      if (!ss) return
+      const ss = await listSessions(projectId).catch(() => null)
+      if (!ss || cancelled) return
       setSessions(ss)
       setActiveSession(prev => {
         if (!prev) return prev
         const updated = ss.find(s => s.id === prev.id)
-        return updated && updated.name !== prev.name ? updated : prev
+        // Always sync the full session object, not just on name change — keeps
+        // status, amplifierSessionId, and other fields up to date too.
+        return updated ?? prev
       })
     }, 5_000)
-    return () => clearInterval(id)
+
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
   }, [activeProject?.id])
 
   async function selectProject(p: Project) {
@@ -236,16 +247,14 @@ export default function WorkspaceApp() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg-page)' }}>
+    <div style={{ height: '100%', background: 'var(--bg-page)', position: 'relative' }}>
+    <PanelGroup direction="horizontal" style={{ height: '100%', overflow: 'hidden' }}>
 
-      {/* ── Left sidebar (200px) ──────────────────────────────────────── */}
-      <div style={{
-        width: 200,
-        flexShrink: 0,
+      {/* ── Left sidebar (resizable) ──────────────────────────────────────── */}
+      <Panel defaultSize={16} minSize={10} maxSize={30} style={{
         display: 'flex',
         flexDirection: 'column',
         background: 'var(--bg-sidebar)',
-        borderRight: '1px solid var(--border)',
         overflow: 'hidden',
       }}>
         {/* Projects section header */}
@@ -337,8 +346,40 @@ export default function WorkspaceApp() {
           ))}
 
           {/* Sessions for active project */}
+          {activeProject && (
+            <div style={{ borderTop: '1px solid var(--border)' }}>
+              {/* Sessions section header */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '0 12px',
+                height: 32,
+                borderBottom: sessions.length > 0 ? '1px solid var(--border)' : 'none',
+                flexShrink: 0,
+              }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 600,
+                  textTransform: 'uppercase', letterSpacing: '0.08em',
+                  color: 'var(--text-very-muted)',
+                }}>Sessions</span>
+                <button
+                  onClick={handleCreateSession}
+                  disabled={creatingSession}
+                  style={{
+                    fontSize: 14, lineHeight: 1,
+                    color: creatingSession ? 'var(--text-very-muted)' : 'var(--text-muted)',
+                    background: 'none', border: 'none', cursor: creatingSession ? 'default' : 'pointer',
+                    padding: '0 2px',
+                  }}
+                  onMouseEnter={e => { if (!creatingSession) (e.currentTarget as HTMLElement).style.color = 'var(--amber)' }}
+                  onMouseLeave={e => { if (!creatingSession) (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)' }}
+                  aria-label="New session"
+                  title="New session"
+                >{creatingSession ? '…' : '+'}</button>
+              </div>
+            </div>
+          )}
           {activeProject && sessions.length > 0 && (
-            <div style={{ borderTop: '1px solid var(--border)', marginTop: 4 }}>
+            <div>
               {sessions.map(s => (
                 <div
                   key={s.id}
@@ -389,41 +430,32 @@ export default function WorkspaceApp() {
                       padding: '6px 8px',
                       fontSize: 13, color: 'var(--text-very-muted)',
                       background: 'none', border: 'none', cursor: 'pointer',
-                      opacity: 0, flexShrink: 0,
+                      opacity: 0.35, flexShrink: 0,
                     }}
-                    className="delete-btn"
                     title="Close session"
-                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--red)'}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-very-muted)'}
+                    onMouseEnter={e => {
+                      ;(e.currentTarget as HTMLElement).style.color = 'var(--red)'
+                      ;(e.currentTarget as HTMLElement).style.opacity = '1'
+                    }}
+                    onMouseLeave={e => {
+                      ;(e.currentTarget as HTMLElement).style.color = 'var(--text-very-muted)'
+                      ;(e.currentTarget as HTMLElement).style.opacity = '0.35'
+                    }}
                   >×</button>
                 </div>
               ))}
             </div>
           )}
 
-          {/* New session link */}
-          {activeProject && (
-            <button
-              onClick={handleCreateSession}
-              disabled={creatingSession}
-              style={{
-                width: '100%', textAlign: 'left',
-                padding: '7px 14px',
-                fontSize: 11, color: 'var(--text-very-muted)',
-                background: 'none', border: 'none', cursor: 'pointer',
-                opacity: creatingSession ? 0.5 : 1,
-              }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--amber)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-very-muted)'}
-            >
-              {creatingSession ? '…' : '+ New session'}
-            </button>
-          )}
+
         </div>
-      </div>
+      </Panel>
+
+      <PanelResizeHandle style={{ width: 4, background: 'var(--border)', cursor: 'col-resize', flexShrink: 0 }} />
 
       {/* ── Main area: terminal + right panel ─────────────────────────── */}
-      <PanelGroup direction="horizontal" style={{ flex: 1, overflow: 'hidden' }}>
+      <Panel style={{ overflow: 'hidden' }}>
+      <PanelGroup direction="horizontal" style={{ height: '100%' }}>
         <Panel minSize={20} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
           {/* Pane title strip */}
@@ -601,6 +633,8 @@ export default function WorkspaceApp() {
           </>
         )}
       </PanelGroup>
+      </Panel>
+    </PanelGroup>
 
       {/* ── Directory browser modal ─────────────────────────────────── */}
       {showDirBrowser && (

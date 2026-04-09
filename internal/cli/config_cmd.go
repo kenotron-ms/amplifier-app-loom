@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -19,16 +18,19 @@ var configCmd = &cobra.Command{
 
 var absorbEnvCmd = &cobra.Command{
 	Use:   "absorb-env",
-	Short: "Copy AI API keys from environment variables into the daemon's config database",
-	Long: `Reads ANTHROPIC_API_KEY and OPENAI_API_KEY from the current environment
-and saves them persistently in the daemon's config database.
+	Short: "Auto-detect AI API keys and save them into the daemon's config database",
+	Long: `Detects AI provider API keys from common local sources and saves them
+persistently in the daemon's config database.
+
+Sources checked in priority order:
+  1. Process environment  — ANTHROPIC_API_KEY, OPENAI_API_KEY
+  2. ~/.amplifier/keys.env
+  3. ~/.anthropic/api_key  (Anthropic CLI format)
+  4. ~/.env
+  5. Shell dotfiles        — ~/.zshrc, ~/.zshenv, ~/.zprofile, ~/.bash_profile, etc.
 
 This is useful when installing as a system service, where the daemon process
-won't have access to your user environment variables.
-
-For system-level installs, run this with sudo -E to preserve your env vars:
-
-  sudo -E loom config absorb-env`,
+won't have access to your user shell environment.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dbPath := platform.DBPath()
 		s, err := store.Open(dbPath)
@@ -52,8 +54,8 @@ func init() {
 	configCmd.AddCommand(absorbEnvCmd)
 }
 
-// absorbEnvKeys reads AI API keys from the environment and persists them in the store.
-// Returns the number of keys absorbed. Prints progress to stdout.
+// absorbEnvKeys detects AI API keys from local sources and persists them in
+// the store.  Returns the number of keys absorbed.  Prints progress to stdout.
 func absorbEnvKeys(s store.Store) (int, error) {
 	ctx := context.Background()
 	cfg, err := s.GetConfig(ctx)
@@ -61,23 +63,24 @@ func absorbEnvKeys(s store.Store) (int, error) {
 		cfg = config.Defaults()
 	}
 
+	detected := config.DetectAPIKeys()
 	absorbed := 0
 
-	if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
-		cfg.AnthropicKey = key
+	if detected.AnthropicKey != "" {
+		cfg.AnthropicKey = detected.AnthropicKey
 		if cfg.AIProvider == "" {
 			cfg.AIProvider = "anthropic"
 		}
-		fmt.Println("  ✓ Absorbed ANTHROPIC_API_KEY")
+		fmt.Printf("  ✓ Absorbed ANTHROPIC_API_KEY  (from %s)\n", detected.AnthropicSource)
 		absorbed++
 	}
 
-	if key := os.Getenv("OPENAI_API_KEY"); key != "" {
-		cfg.OpenAIKey = key
+	if detected.OpenAIKey != "" {
+		cfg.OpenAIKey = detected.OpenAIKey
 		if cfg.AIProvider == "" {
 			cfg.AIProvider = "openai"
 		}
-		fmt.Println("  ✓ Absorbed OPENAI_API_KEY")
+		fmt.Printf("  ✓ Absorbed OPENAI_API_KEY  (from %s)\n", detected.OpenAISource)
 		absorbed++
 	}
 

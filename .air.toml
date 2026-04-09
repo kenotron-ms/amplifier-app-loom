@@ -1,0 +1,41 @@
+# Air config — Go hot-reload for loom dev
+# https://github.com/air-verse/air
+root = "."
+tmp_dir = ".air_tmp"
+
+[build]
+  cmd     = "go build -ldflags \"-X github.com/ms/amplifier-app-loom/internal/api.Version=dev -s -w\" -o dist/loom ./cmd/loom/"
+  bin     = "dist/loom"
+  args_bin = ["_serve"]
+
+  # Watch these extensions
+  include_ext = ["go", "mod", "sum"]
+
+  # Never watch these dirs (keeps rebuild fast; vite owns ui/)
+  exclude_dir = [
+    "ui", "web/dist", "dist", ".air_tmp",
+    "docs", "packaging", "release", ".worktrees",
+    "scripts", ".amplifier"
+  ]
+
+  exclude_regex = ["_test\\.go"]
+  delay         = 500        # ms debounce — avoids double-builds on save
+  kill_delay    = "200ms"
+  rerun         = false
+
+[log]
+  time      = true
+  main_only = false
+
+[color]
+  main    = "magenta"
+  watcher = "cyan"
+  build   = "yellow"
+  runner  = "green"
+
+[screen]
+  clear_on_rebuild = false
+  keep_scroll      = true
+
+[misc]
+  clean_on_exit = true

@@ -13,21 +13,23 @@ import (
 // OnboardingSteps captures which setup conditions are unmet at wizard launch time.
 // Only steps with true flags are shown in the wizard.
 type OnboardingSteps struct {
-	NeedsAPIKey  bool // no AI key at all (neither Anthropic nor OpenAI)
-	NeedsFDA     bool // always false — FDA is surfaced by the tray health indicator, not the wizard
-	NeedsService bool // LaunchAgent/Daemon plist not present
+	NeedsAPIKey    bool // no AI key at all (neither Anthropic nor OpenAI)
+	NeedsFDA       bool // always false — FDA is surfaced by the tray health indicator, not the wizard
+	NeedsService   bool // LaunchAgent/Daemon plist not present
+	NeedsAmplifier bool // Amplifier loom bundle not registered
 }
 
 // state holds wizard session data shared between the pure-Go state machine and
 // the platform-specific CGo UI callbacks (wizard_darwin_callbacks.go).
 type state struct {
-	mu           sync.Mutex  // guards anthropicKey and openAIKey
-	anthropicKey string
-	openAIKey    string
-	fdaGranted   atomic.Bool // accessed from multiple goroutines; use Load/Store
-	closed       atomic.Bool // accessed from multiple goroutines; use Load/Store
-	onDone       func()
-	steps        OnboardingSteps // which steps are needed (set once at Show() time)
+	mu                 sync.Mutex  // guards anthropicKey and openAIKey
+	anthropicKey       string
+	openAIKey          string
+	fdaGranted         atomic.Bool // accessed from multiple goroutines; use Load/Store
+	closed             atomic.Bool // accessed from multiple goroutines; use Load/Store
+	onDone             func()
+	steps              OnboardingSteps // which steps are needed (set once at Show() time)
+	onboardingComplete bool            // true if user has completed onboarding at least once
 }
 
 // gState is the active wizard session. Set by Show(), read by CGo callbacks.
@@ -39,10 +41,11 @@ var gState atomic.Pointer[state]
 func DetectNeededSteps(cfg *config.Config) OnboardingSteps {
 	return OnboardingSteps{
 		// Only prompt for a key if the user has provided neither Anthropic nor OpenAI.
-		NeedsAPIKey:  cfg.AnthropicKey == "" && cfg.OpenAIKey == "",
+		NeedsAPIKey: cfg.AnthropicKey == "" && cfg.OpenAIKey == "",
 		// FDA is handled by the tray health indicator, not the wizard.
-		NeedsFDA:     false,
-		NeedsService: !isServiceInstalled(),
+		NeedsFDA:       false,
+		NeedsService:   !isServiceInstalled(),
+		NeedsAmplifier: !isAmplifierConnected(),
 	}
 }
 
@@ -50,7 +53,7 @@ func DetectNeededSteps(cfg *config.Config) OnboardingSteps {
 // If this returns false the tray loads silently with no wizard shown.
 func NeedsOnboarding(cfg *config.Config) bool {
 	s := DetectNeededSteps(cfg)
-	return s.NeedsAPIKey || s.NeedsFDA || s.NeedsService
+	return s.NeedsAPIKey || s.NeedsFDA || s.NeedsService || s.NeedsAmplifier
 }
 
 // Show presents the onboarding wizard. Only the steps returned by
@@ -79,10 +82,27 @@ func Show(st store.Store, onDone func()) {
 		s.openAIKey = cfg.OpenAIKey
 		s.fdaGranted.Store(CheckFDA())
 		s.steps = DetectNeededSteps(cfg)
+		s.onboardingComplete = cfg.OnboardingComplete
 	} else {
 		// No config yet — assume API key and service are needed; FDA never needed.
 		s.steps = OnboardingSteps{NeedsAPIKey: true, NeedsFDA: false, NeedsService: true}
 	}
+
+	// Pre-fill any missing keys from local file sources (env vars, ~/.amplifier/keys.env,
+	// ~/.anthropic/api_key, shell dotfiles).  This runs even when the wizard is going to
+	// show the API-key step so the user sees a pre-filled field and just has to confirm.
+	if s.anthropicKey == "" || s.openAIKey == "" {
+		detected := config.DetectAPIKeys()
+		if s.anthropicKey == "" && detected.AnthropicKey != "" {
+			s.anthropicKey = detected.AnthropicKey
+			slog.Info("onboarding: pre-filled Anthropic key", "source", detected.AnthropicSource)
+		}
+		if s.openAIKey == "" && detected.OpenAIKey != "" {
+			s.openAIKey = detected.OpenAIKey
+			slog.Info("onboarding: pre-filled OpenAI key", "source", detected.OpenAISource)
+		}
+	}
+
 	gState.Store(s)
 	showImpl(s)
 }

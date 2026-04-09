@@ -316,6 +316,19 @@
     <div class="install-status" id="install-status"></div>
   </div>
 
+  <!-- Connect Amplifier -->
+  <div class="step-view" id="step-amplifier">
+    <div class="section-title">Connect Amplifier</div>
+    <p class="section-sub">
+      Loom uses Amplifier to run AI jobs. Register the Loom bundle once
+      to enable <code>amplifier</code>-type jobs.
+    </p>
+    <button class="btn-install" id="amplifier-btn" onclick="doConnectAmplifier()">
+      Connect →
+    </button>
+    <div class="install-status" id="amplifier-status"></div>
+  </div>
+
 </div>
 
 <div class="footer">
@@ -333,8 +346,11 @@
   var needsAPIKey  = {{NEEDS_API_KEY}};
   var needsFDA     = {{NEEDS_FDA}};
   var needsService = {{NEEDS_SERVICE}};
+  var needsAmplifier  = {{NEEDS_AMPLIFIER}};
+  var isReturningUser = {{IS_RETURNING_USER}};
   var fdaGranted   = {{FDA_GRANTED}};
   var fdaSkipped   = false;
+  var amplifierConnected = false;
 
   // ── Build step sequence ───────────────────────────────────
   // welcome is always first; then only the steps that are needed.
@@ -342,8 +358,9 @@
   if (needsAPIKey)  STEPS.push('apikey');
   if (needsFDA)     STEPS.push('fda');
   if (needsService) STEPS.push('service');
+  if (needsAmplifier) STEPS.push('amplifier');
 
-  var idx = 0;
+  var idx = (isReturningUser && STEPS.length > 1) ? 1 : 0;
   var serviceInstalled = false;
   var selectedLevel    = 'user';
 
@@ -351,10 +368,11 @@
   function isLast() { return idx === STEPS.length - 1; }
 
   var STEP_LABELS = {
-    welcome: 'Welcome',
-    apikey:  'API Keys',
-    fda:     'Permissions',
-    service: 'Install'
+    welcome:   'Welcome',
+    apikey:    'API Keys',
+    fda:       'Permissions',
+    service:   'Install',
+    amplifier: 'Connect'
   };
 
   // ── JS → Go ───────────────────────────────────────────────
@@ -376,7 +394,7 @@
     document.getElementById('steps').innerHTML = pills;
 
     // Show only current step
-    ['welcome', 'apikey', 'fda', 'service'].forEach(function(s) {
+    ['welcome', 'apikey', 'fda', 'service', 'amplifier'].forEach(function(s) {
       var el = document.getElementById('step-' + s);
       if (el) el.className = 'step-view' + (s === step() ? ' active' : '');
     });
@@ -406,6 +424,10 @@
       case 'service':
         next.textContent = 'Done';
         next.disabled = !serviceInstalled;
+        break;
+      case 'amplifier':
+        next.textContent = label;
+        next.disabled = !amplifierConnected;
         break;
     }
   }
@@ -458,6 +480,9 @@
 
       case 'service':
         if (serviceInstalled) post('done', '');
+        break;
+      case 'amplifier':
+        if (amplifierConnected) advance();
         break;
     }
   }
@@ -518,15 +543,23 @@
   }
 
   // ── Welcome checklist ─────────────────────────────────────
+  function doConnectAmplifier() {
+    document.getElementById('amplifier-btn').disabled = true;
+    document.getElementById('amplifier-btn').textContent = 'Connecting…';
+    document.getElementById('amplifier-status').textContent = '';
+    post('connectAmplifier', '');
+  }
+
   function buildWelcome() {
     var items = [];
     if (needsAPIKey)  items.push(['🔑', 'Connect an AI API key']);
     if (needsFDA)     items.push(['🔒', 'Grant Full Disk Access']);
-    if (needsService) items.push(['⚙️', 'Install the background service']);
+    if (needsService)   items.push(['⚙️', 'Install the background service']);
+    if (needsAmplifier) items.push(['🔗', 'Connect Amplifier']);
 
-    var sub = items.length === 1
-      ? 'One quick step to complete setup.'
-      : items.length + ' steps to complete setup.';
+    var sub = isReturningUser
+      ? (items.length === 1 ? 'One new step needs your attention.' : items.length + ' new steps need your attention.')
+      : (items.length === 1 ? 'One quick step to complete setup.' : items.length + ' steps to complete setup.');
     document.getElementById('welcome-sub').textContent = sub;
 
     document.getElementById('welcome-list').innerHTML = items.map(function(it) {
@@ -557,6 +590,14 @@
     document.getElementById('install-btn').textContent = 'Try Again →';
     document.getElementById('install-status').textContent = '⚠ ' + msg;
     document.getElementById('install-status').className = 'install-status error';
+  });
+
+  window.addEventListener('amplifierConnected', function() {
+    amplifierConnected = true;
+    document.getElementById('amplifier-btn').style.display = 'none';
+    document.getElementById('amplifier-status').textContent = '✓ Amplifier connected';
+    document.getElementById('amplifier-status').className = 'install-status success';
+    document.getElementById('btn-next').disabled = false;
   });
 
   window.addEventListener('installError', function(e) {

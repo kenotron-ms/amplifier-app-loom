@@ -215,13 +215,15 @@ func showImpl(s *state) {
 }
 
 // buildHTML substitutes Go-side placeholders into wizard.html.
-//   - {{FDA_GUIDE_DATA_URI}} → base64 PNG data URI
-//   - {{ANTHROPIC_KEY}}      → HTML-escaped key (attribute context)
-//   - {{OPENAI_KEY}}         → HTML-escaped key (attribute context)
-//   - {{FDA_GRANTED}}        → "true"/"false" JS boolean
-//   - {{NEEDS_API_KEY}}      → "true"/"false" — whether API key step is needed
-//   - {{NEEDS_FDA}}          → "true"/"false" — whether FDA step is needed
-//   - {{NEEDS_SERVICE}}      → "true"/"false" — whether service install step is needed
+//   - {{FDA_GUIDE_DATA_URI}}  → base64 PNG data URI
+//   - {{ANTHROPIC_KEY}}       → HTML-escaped key (attribute context)
+//   - {{OPENAI_KEY}}          → HTML-escaped key (attribute context)
+//   - {{FDA_GRANTED}}         → "true"/"false" JS boolean
+//   - {{NEEDS_API_KEY}}       → "true"/"false" — whether API key step is needed
+//   - {{NEEDS_FDA}}           → "true"/"false" — whether FDA step is needed
+//   - {{NEEDS_SERVICE}}       → "true"/"false" — whether service install step is needed
+//   - {{NEEDS_AMPLIFIER}}     → "true"/"false" — whether Amplifier bundle registration is needed
+//   - {{IS_RETURNING_USER}}   → "true"/"false" — whether user has completed onboarding before
 func buildHTML(s *state) string {
 	pngDataURI := "data:image/png;base64," + base64.StdEncoding.EncodeToString(fdaGuidePNG)
 	b := func(v bool) string {
@@ -239,6 +241,8 @@ func buildHTML(s *state) string {
 		"{{NEEDS_API_KEY}}", b(s.steps.NeedsAPIKey),
 		"{{NEEDS_FDA}}", b(s.steps.NeedsFDA),
 		"{{NEEDS_SERVICE}}", b(s.steps.NeedsService),
+		"{{NEEDS_AMPLIFIER}}", b(s.steps.NeedsAmplifier),
+		"{{IS_RETURNING_USER}}", b(s.onboardingComplete),
 	).Replace(string(wizardHTMLBytes))
 	return result
 }

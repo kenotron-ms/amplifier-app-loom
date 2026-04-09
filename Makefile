@@ -4,7 +4,7 @@ MODULE   = github.com/ms/amplifier-app-loom
 VERSION  = 0.7.1
 LDFLAGS  = -ldflags "-X $(MODULE)/internal/api.Version=$(VERSION) -s -w"
 
-.PHONY: build run install-svc uninstall-svc test clean cross ui release
+.PHONY: build run install-svc uninstall-svc test clean cross ui release dev dev-go dev-ui
 
 ui:
 	cd ui && npm install && npm run build
@@ -19,6 +19,28 @@ $(DIST):
 
 run: build
 	./$(DIST)/$(BINARY) _serve
+
+# ── Development: hot-reload Go (air) + Vite dev server in parallel ────────
+# Browse http://localhost:5173  →  Vite proxies /api + /ws → Go at :7700
+# Uses make -j2 so each process runs directly with its own stdout — no
+# subshell buffering, no silent background jobs.
+dev:
+	@mkdir -p $(DIST)
+	@if [ ! -f web/dist/index.html ]; then \
+		printf "\033[33m→ web/dist is empty — building UI assets first...\033[0m\n"; \
+		$(MAKE) ui; \
+	fi
+	@command -v air >/dev/null 2>&1 || (printf "\033[33m→ Installing air...\033[0m\n" && go install github.com/air-verse/air@latest)
+	@printf "\033[32m→ Dev environment starting:\033[0m\n"
+	@printf "  \033[36m•\033[0m Go hot-reload (air)    — .go changes rebuild → :7700\n"
+	@printf "  \033[36m•\033[0m Vite dev server         — http://localhost:5173\n\n"
+	@$(MAKE) -j2 dev-go dev-ui
+
+dev-go:
+	air
+
+dev-ui:
+	cd ui && npm run dev
 
 install-svc: build
 	./$(DIST)/$(BINARY) install
