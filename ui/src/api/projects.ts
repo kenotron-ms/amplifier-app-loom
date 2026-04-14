@@ -2,6 +2,7 @@ export interface Project {
   id: string
   name: string
   path: string
+  workspace?: string
   createdAt: number
   lastActivityAt: number
 }
@@ -251,4 +252,38 @@ export async function updateProjectSettings(
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
+}
+
+// ── Amplifier sessions (Phase 2 — reads from Amplifier's session store) ──────
+
+export interface AmplifierSession {
+  id: string
+  name: string
+  createdAt: string
+  lastActiveAt: string
+}
+
+export async function getProject(id: string): Promise<Project> {
+  const res = await fetch(`/api/projects/${id}`)
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function listAmplifierSessions(projectId: string): Promise<AmplifierSession[]> {
+  const res = await fetch(`/api/projects/${projectId}/amplifier-sessions`)
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function openTerminal(
+  projectId: string,
+  mode: 'new' | 'resume',
+  sessionId?: string,
+): Promise<void> {
+  const res = await fetch(`/api/projects/${projectId}/open-terminal`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode, sessionId }),
+  })
+  if (!res.ok) throw new Error(await res.text())
 }
