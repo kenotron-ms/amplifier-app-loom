@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import ProjectsView from './views/projects'
+import ProjectsGrid from './views/projects'
 import JobsView from './views/jobs'
 import MirrorView from './views/mirror'
 import BundlesView from './views/bundles'
@@ -157,7 +157,7 @@ export default function App() {
 
       {/* ── Section content ─────────────────────────────────────────── */}
       <div className="flex-1 overflow-hidden">
-        {active === 'projects' && <ProjectsView />}
+        {active === 'projects' && <ProjectsGrid onSelectProject={(id) => console.log('Selected:', id)} />}
         {active === 'jobs'     && <JobsView />}
         {active === 'mirror'   && <MirrorView />}
         {active === 'bundles'  && <BundlesView />}
