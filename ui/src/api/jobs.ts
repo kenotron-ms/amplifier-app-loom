@@ -12,10 +12,13 @@ export interface Job {
 export interface JobRun {
   id: string
   jobId: string
-  status: 'running' | 'succeeded' | 'failed' | 'cancelled'
+  jobName: string
+  status: 'pending' | 'running' | 'success' | 'failed' | 'timeout' | 'skipped'
   startedAt: string
-  finishedAt?: string
+  endedAt?: string   // NOTE: was "finishedAt" — corrected to match Go backend
+  exitCode: number
   output?: string
+  attempt: number
 }
 
 export async function listJobs(): Promise<Job[]> {
@@ -34,4 +37,9 @@ export async function triggerJob(jobId: string): Promise<JobRun> {
   const res = await fetch(`/api/jobs/${jobId}/trigger`, { method: 'POST' })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
+}
+
+export async function deleteJob(jobId: string): Promise<void> {
+  const res = await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(await res.text())
 }
