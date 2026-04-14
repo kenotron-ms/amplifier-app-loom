@@ -174,6 +174,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/projects/{id}/files", s.listFiles)
 	mux.HandleFunc("GET /api/projects/{id}/files/{path...}", s.readFile)
 
+	// Amplifier sessions + terminal launch
+	mux.HandleFunc("GET /api/projects/{id}/amplifier-sessions", s.handleListAmplifierSessions)
+	mux.HandleFunc("POST /api/projects/{id}/open-terminal", s.handleOpenTerminal)
+
 	// Server-side directory browser (works for remote servers too)
 	mux.HandleFunc("GET /api/filesystem/browse", s.browseDirs)
 	mux.HandleFunc("GET /api/filesystem/find-dir", s.findDir)
