@@ -105,3 +105,9 @@ html, body, #root {
 .hljs-title, .hljs-section, .hljs-name { color: #4A3580; font-weight: 600; }
 .hljs-type { color: #7C3F2A; }
 .hljs-meta { color: var(--text-muted); }
+
+/* ── Pulsing status dot for in-progress runs ────────────────────────── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
