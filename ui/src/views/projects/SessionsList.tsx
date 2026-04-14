@@ -36,6 +36,10 @@ export default function SessionsList({ projectId }: Props) {
 
   if (loading) return <div style={{ padding: 16, color: 'var(--text-very-muted)' }}>Loading sessions...</div>
 
+  const sorted = [...sessions].sort((a, b) =>
+    (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0)
+  )
+
   return (
     <div style={{ padding: 16 }}>
       <button
@@ -51,13 +55,13 @@ export default function SessionsList({ projectId }: Props) {
         New Session
       </button>
 
-      {sessions.length === 0 ? (
+      {sorted.length === 0 ? (
         <div style={{ color: 'var(--text-very-muted)', fontSize: 13, paddingTop: 16 }}>
           No Amplifier sessions found for this project.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {sessions.map(s => (
+          {sorted.map(s => (
             <div key={s.id} style={{
               display: 'flex', alignItems: 'center',
               padding: '10px 12px', borderBottom: '1px solid var(--border)', gap: 12,
@@ -68,6 +72,17 @@ export default function SessionsList({ projectId }: Props) {
               }}>
                 {s.name || s.id}
               </span>
+              {s.isActive && (
+                <span style={{
+                  fontSize: 10, fontWeight: 600,
+                  padding: '1px 6px', borderRadius: 9999,
+                  background: 'rgba(76,175,116,0.15)',
+                  color: '#4caf74',
+                  flexShrink: 0,
+                }}>
+                  Active
+                </span>
+              )}
               <span style={{ fontSize: 12, color: 'var(--text-very-muted)', flexShrink: 0 }}>
                 {formatTimestamp(s.lastActiveAt || s.createdAt)}
               </span>

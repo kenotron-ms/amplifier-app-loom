@@ -261,6 +261,7 @@ export interface AmplifierSession {
   name: string
   createdAt: string
   lastActiveAt: string
+  isActive?: boolean
 }
 
 export async function getProject(id: string): Promise<Project> {
