@@ -42,6 +42,8 @@ type Config struct {
 	// indicator's targeted "Fix →" dialog is shown for missing conditions.
 	OnboardingComplete bool `json:"onboardingComplete,omitempty"`
 
+	PreferredTerminal string `json:"preferredTerminal,omitempty"`
+
 	// AppBundles is the list of Amplifier bundles the user has added via loom.
 	// Each entry tracks the install spec (for re-installation) and enabled state
 	// (for toggling without removing).
