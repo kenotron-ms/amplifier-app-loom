@@ -46,7 +46,7 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 
 	terminal := s.cfg.PreferredTerminal
 	if terminal == "" {
-		terminal = "Terminal.app"
+		terminal = "Ghostty"
 	}
 
 	switch req.Mode {

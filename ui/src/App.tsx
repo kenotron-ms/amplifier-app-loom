@@ -5,6 +5,7 @@ import JobsView from './views/jobs'
 import MirrorView from './views/mirror'
 import BundlesView from './views/bundles'
 import FeedbackModal from './components/FeedbackModal'
+import SettingsModal from './components/SettingsModal'
 
 type Tab = 'projects' | 'jobs' | 'mirror' | 'bundles'
 
@@ -60,6 +61,7 @@ function SettingsIcon() {
 export default function App() {
   const [active, setActive]             = useState<Tab>('projects')
   const [showFeedback, setShowFeedback] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
   // Subscribe to the server-sent focus stream. When the tray's "Open Dashboard"
@@ -141,6 +143,7 @@ export default function App() {
             <BellIcon />
           </button>
           <button
+            onClick={() => setShowSettings(true)}
             style={{
               width: 26, height: 26,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -173,6 +176,7 @@ export default function App() {
       </div>
 
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   )
 }

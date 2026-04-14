@@ -8,12 +8,13 @@ import (
 )
 
 type settingsResponse struct {
-	AIProvider      string `json:"aiProvider"`
-	AnthropicKeySet bool   `json:"anthropicKeySet"`
-	AnthropicModel  string `json:"anthropicModel"`
-	OpenAIKeySet    bool   `json:"openAIKeySet"`
-	OpenAIModel     string `json:"openAIModel"`
-	AIConfigured    bool   `json:"aiConfigured"`
+	AIProvider        string `json:"aiProvider"`
+	AnthropicKeySet   bool   `json:"anthropicKeySet"`
+	AnthropicModel    string `json:"anthropicModel"`
+	OpenAIKeySet      bool   `json:"openAIKeySet"`
+	OpenAIModel       string `json:"openAIModel"`
+	AIConfigured      bool   `json:"aiConfigured"`
+	PreferredTerminal string `json:"preferredTerminal,omitempty"`
 }
 
 type settingsUpdateRequest struct {
@@ -23,6 +24,7 @@ type settingsUpdateRequest struct {
 	OpenAIKey          string `json:"openAIKey"`
 	OpenAIModel        string `json:"openAIModel"`
 	OnboardingComplete bool   `json:"onboardingComplete"`
+	PreferredTerminal  string `json:"preferredTerminal,omitempty"`
 }
 
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
@@ -35,12 +37,13 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 	openaiSet := s.cfg.OpenAIKey != "" || os.Getenv("OPENAI_API_KEY") != ""
 	configured := (provider == "anthropic" && anthropicSet) || (provider == "openai" && openaiSet)
 	writeJSON(w, http.StatusOK, settingsResponse{
-		AIProvider:      provider,
-		AnthropicKeySet: anthropicSet,
-		AnthropicModel:  s.cfg.AnthropicModel,
-		OpenAIKeySet:    openaiSet,
-		OpenAIModel:     s.cfg.OpenAIModel,
-		AIConfigured:    configured,
+		AIProvider:        provider,
+		AnthropicKeySet:   anthropicSet,
+		AnthropicModel:    s.cfg.AnthropicModel,
+		OpenAIKeySet:      openaiSet,
+		OpenAIModel:       s.cfg.OpenAIModel,
+		AIConfigured:      configured,
+		PreferredTerminal: s.cfg.PreferredTerminal,
 	})
 }
 
@@ -69,6 +72,9 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.OnboardingComplete {
 		s.cfg.OnboardingComplete = true
+	}
+	if req.PreferredTerminal != "" {
+		s.cfg.PreferredTerminal = req.PreferredTerminal
 	}
 
 	if err := s.store.SaveConfig(r.Context(), s.cfg); err != nil {
