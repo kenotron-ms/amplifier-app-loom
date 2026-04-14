@@ -13,9 +13,10 @@ const TYPE_COLORS: Record<string, string> = {
   module: 'bg-[#C4784A]/20 text-[#C4784A]',
 }
 
-function Stars({ rating }: { rating: number }) {
-  const full    = Math.floor(rating)
-  const hasHalf = rating - full >= 0.4
+function Stars({ rating }: { rating: number | null }) {
+  const r       = rating ?? 0
+  const full    = Math.floor(r)
+  const hasHalf = r - full >= 0.4
   return (
     <span className="flex items-center gap-0.5 text-[var(--amber)] text-[10px]">
       {Array.from({ length: 5 }, (_, i) => {
@@ -23,7 +24,7 @@ function Stars({ rating }: { rating: number }) {
         if (i === full && hasHalf) return <span key={i} className="opacity-60">★</span>
         return <span key={i} className="text-[var(--border-dark)]">★</span>
       })}
-      <span className="text-[var(--text-muted)] ml-0.5">{rating.toFixed(1)}</span>
+      <span className="text-[var(--text-muted)] ml-0.5">{r.toFixed(1)}</span>
     </span>
   )
 }
