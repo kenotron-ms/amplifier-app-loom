@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Job, listJobs } from '../../api/jobs'
+import { Job, deleteJob, listJobs } from '../../api/jobs'
 import JobList from './JobList'
 import RunDetail from './RunDetail'
 import ChatView from '../chat'
@@ -19,8 +19,17 @@ export default function JobsView() {
 
   const handleSelect = (id: string) => setSelectedId(id)
 
-  // "+ New" just clears selection — the right panel defaults to chat
+  // "+" New just clears selection — the right panel defaults to chat
   const handleNew = () => setSelectedId(null)
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this job?')) return
+    try {
+      await deleteJob(id)
+      setJobs(prev => prev.filter(j => j.id !== id))
+      if (selectedId === id) setSelectedId(null)
+    } catch (e) { console.error('deleteJob:', e) }
+  }
 
   return (
     <div style={{ display: 'flex', height: '100%', background: 'var(--bg-page)' }}>
@@ -29,6 +38,7 @@ export default function JobsView() {
         selectedId={selectedId}
         onSelect={handleSelect}
         onNew={handleNew}
+        onDelete={handleDelete}
       />
       <div className="flex-1 overflow-hidden">
         {selectedJob
