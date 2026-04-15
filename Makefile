@@ -1,7 +1,7 @@
 BINARY   = loom
 DIST     = dist
 MODULE   = github.com/ms/amplifier-app-loom
-VERSION  = 0.7.1
+VERSION  = 0.8.1
 LDFLAGS  = -ldflags "-X $(MODULE)/internal/api.Version=$(VERSION) -s -w"
 
 .PHONY: build run install-svc uninstall-svc test clean cross ui release dev dev-go dev-ui
@@ -31,6 +31,8 @@ dev:
 		$(MAKE) ui; \
 	fi
 	@command -v air >/dev/null 2>&1 || (printf "\033[33m→ Installing air...\033[0m\n" && go install github.com/air-verse/air@latest)
+	@printf "\033[33m→ Stopping any running loom service...\033[0m\n"
+	@loom stop 2>/dev/null || true
 	@printf "\033[32m→ Dev environment starting:\033[0m\n"
 	@printf "  \033[36m•\033[0m Go hot-reload (air)    — .go changes rebuild → :7700\n"
 	@printf "  \033[36m•\033[0m Vite dev server         — http://localhost:5173\n\n"
