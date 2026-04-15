@@ -53,7 +53,23 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Mode {
 	case "new":
-		cmd := exec.Command("open", "-a", terminal, p.Path)
+		ampBin := resolveAmplifier()
+		var cmd *exec.Cmd
+		switch terminal {
+		case "Ghostty":
+			// Ghostty supports --working-directory and --command via open --args
+			cmd = exec.Command("open", "-na", "Ghostty", "--args",
+				"--working-directory="+p.Path,
+				"--command="+ampBin+" run")
+		default:
+			// Terminal.app, iTerm2, Warp — AppleScript do script
+			script := fmt.Sprintf(
+				`tell application "%s"
+	activate
+	do script "cd '%s' && '%s' run"
+end tell`, terminal, p.Path, ampBin)
+			cmd = exec.Command("osascript", "-e", script)
+		}
 		if err := cmd.Run(); err != nil {
 			writeError(w, http.StatusInternalServerError,
 				fmt.Sprintf("failed to open %s: %s", terminal, err))
