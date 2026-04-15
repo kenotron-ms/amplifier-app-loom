@@ -57,13 +57,12 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 		var cmd *exec.Cmd
 		switch terminal {
 		case "Ghostty":
-			// Find the ghostty binary (prefers PATH, falls back to app bundle)
-			ghosttyBin, _ := exec.LookPath("ghostty")
-			if ghosttyBin == "" {
-				ghosttyBin = "/Applications/Ghostty.app/Contents/MacOS/ghostty"
-			}
-			// -e runs a command in the new terminal window; each arg is passed separately
-			cmd = exec.Command(ghosttyBin,
+			// On macOS, Ghostty must be launched via `open -na Ghostty.app` to get its
+			// full app-bundle identity. Directly exec-ing the binary (e.g. via exec.LookPath)
+			// causes macOS TCC to show a permission prompt on every launch because the
+			// calling process has no stable app identity to anchor the permission to.
+			cmd = exec.Command("open", "-na", "Ghostty.app",
+				"--args",
 				"--working-directory="+p.Path,
 				"-e", ampBin, "run")
 		default:
