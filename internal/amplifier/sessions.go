@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -50,6 +51,10 @@ func ListProjectSessions(projectPath string) ([]AmplifierSession, error) {
 		}
 		var m Meta
 		if json.Unmarshal(data, &m) != nil {
+			continue
+		}
+		// Skip subsessions — they have IDs starting with 0000000000
+		if strings.HasPrefix(m.SessionID, "0000000000") {
 			continue
 		}
 		lastActive := m.Created
