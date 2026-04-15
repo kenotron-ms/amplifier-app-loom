@@ -57,10 +57,15 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 		var cmd *exec.Cmd
 		switch terminal {
 		case "Ghostty":
-			// Ghostty supports --working-directory and --command via open --args
-			cmd = exec.Command("open", "-na", "Ghostty", "--args",
+			// Find the ghostty binary (prefers PATH, falls back to app bundle)
+			ghosttyBin, _ := exec.LookPath("ghostty")
+			if ghosttyBin == "" {
+				ghosttyBin = "/Applications/Ghostty.app/Contents/MacOS/ghostty"
+			}
+			// -e runs a command in the new terminal window; each arg is passed separately
+			cmd = exec.Command(ghosttyBin,
 				"--working-directory="+p.Path,
-				"--command="+ampBin+" run")
+				"-e", ampBin, "run")
 		default:
 			// Terminal.app, iTerm2, Warp — AppleScript do script
 			script := fmt.Sprintf(
