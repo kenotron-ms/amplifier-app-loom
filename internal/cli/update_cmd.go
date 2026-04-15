@@ -54,6 +54,10 @@ The tray app (if running) will need to be relaunched separately after update.`,
 			}
 			fmt.Printf("\n✓ Updated to v%s. The daemon has been restarted.\n", u.LatestVersion())
 			fmt.Println("  If the tray app is running, quit and relaunch it.")
+
+			// Re-register the Amplifier bundle so the updated version is active.
+			installAmplifierBundleIfDetected()
+
 			return nil
 		default:
 			return fmt.Errorf("unexpected updater state: %s", u.State())
