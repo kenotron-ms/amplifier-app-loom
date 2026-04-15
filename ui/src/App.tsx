@@ -10,10 +10,10 @@ import SettingsModal from './components/SettingsModal'
 type Tab = 'projects' | 'jobs' | 'mirror' | 'bundles'
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'projects', label: 'Projects' },
-  { id: 'jobs',     label: 'Jobs' },
-  { id: 'mirror',   label: 'Mirror' },
-  { id: 'bundles',  label: 'Bundles' },
+  { id: 'jobs',      label: 'Jobs' },
+  { id: 'projects',  label: 'Projects' },
+  { id: 'mirror',    label: 'Mirror' },
+  { id: 'bundles',   label: 'Bundles' },
 ]
 
 // Loom woven-grid logo mark
@@ -59,7 +59,7 @@ function SettingsIcon() {
 }
 
 export default function App() {
-  const [active, setActive]             = useState<Tab>('projects')
+  const [active, setActive]             = useState<Tab>('jobs')
   const [showFeedback, setShowFeedback] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
