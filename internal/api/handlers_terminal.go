@@ -90,20 +90,36 @@ end tell`, terminal, p.Path, ampBin)
 		check := exec.Command("bash", "-c",
 			fmt.Sprintf("ps aux | grep '%s' | grep -v grep", req.SessionID))
 		if check.Run() == nil {
-			// Process found — focus the terminal window via AppleScript.
-			script := fmt.Sprintf(`tell application "%s" to activate`, terminal)
-			exec.Command("osascript", "-e", script).Run() //nolint:errcheck
+			// Process found — focus the terminal window.
+			// For Ghostty, open -a is sufficient; for others, AppleScript activate works.
+			if terminal == "Ghostty" {
+				exec.Command("open", "-a", "Ghostty").Run() //nolint:errcheck
+			} else {
+				script := fmt.Sprintf(`tell application "%s" to activate`, terminal)
+				exec.Command("osascript", "-e", script).Run() //nolint:errcheck
+			}
 			writeJSON(w, http.StatusOK, map[string]string{"status": "focused"})
 			return
 		}
 		// Not running — open a new terminal with amplifier --resume.
 		ampBin := resolveAmplifier()
-		script := fmt.Sprintf(
-			`tell application "%s"
+		var cmd *exec.Cmd
+		if terminal == "Ghostty" {
+			// Same open -na pattern as "new" mode — avoids macOS TCC prompts and
+			// works correctly since Ghostty does not support AppleScript do script.
+			cmd = exec.Command("open", "-na", "Ghostty.app",
+				"--args",
+				"--working-directory="+p.Path,
+				"-e", ampBin, "run", "--resume", req.SessionID)
+		} else {
+			script := fmt.Sprintf(
+				`tell application "%s"
 	activate
 	do script "cd '%s' && '%s' run --resume '%s'"
 end tell`, terminal, p.Path, ampBin, req.SessionID)
-		if err := exec.Command("osascript", "-e", script).Run(); err != nil {
+			cmd = exec.Command("osascript", "-e", script)
+		}
+		if err := cmd.Run(); err != nil {
 			writeError(w, http.StatusInternalServerError,
 				fmt.Sprintf("failed to resume session: %s", err))
 			return
