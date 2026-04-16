@@ -117,12 +117,13 @@ func (j *Job) ResolvedExecutor() ExecutorType {
 type RunStatus string
 
 const (
-	RunStatusPending RunStatus = "pending"
-	RunStatusRunning RunStatus = "running"
-	RunStatusSuccess RunStatus = "success"
-	RunStatusFailed  RunStatus = "failed"
-	RunStatusTimeout RunStatus = "timeout"
-	RunStatusSkipped RunStatus = "skipped"
+	RunStatusPending   RunStatus = "pending"
+	RunStatusRunning   RunStatus = "running"
+	RunStatusSuccess   RunStatus = "success"
+	RunStatusFailed    RunStatus = "failed"
+	RunStatusTimeout   RunStatus = "timeout"
+	RunStatusSkipped   RunStatus = "skipped"
+	RunStatusCancelled RunStatus = "cancelled"
 )
 
 type JobRun struct {

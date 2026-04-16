@@ -24,6 +24,7 @@ type Daemon struct {
 	store       store.Store
 	scheduler   *scheduler.Scheduler
 	queue       *queue.BoundedQueue
+	runner      *scheduler.Runner
 	server      *api.Server
 	mirrorStore *mirror.MirrorStore
 	syncEngine  *mirror.SyncEngine
@@ -80,8 +81,10 @@ func (d *Daemon) Run() error {
 
 	d.queue = jobQueue
 	d.scheduler = sched
+	d.runner = runner
 
 	srv := api.NewServer(d.cfg, d.store, sched, jobQueue, d.startedAt, broadcaster)
+	srv.SetRunner(runner)
 	d.server = srv
 
 	// Wire up the mirror subsystem (connector/entity sync).

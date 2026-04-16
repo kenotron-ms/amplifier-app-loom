@@ -62,7 +62,7 @@ export interface JobRun {
   id: string
   jobId: string
   jobName: string
-  status: 'pending' | 'running' | 'success' | 'failed' | 'timeout' | 'skipped'
+  status: 'pending' | 'running' | 'success' | 'failed' | 'timeout' | 'skipped' | 'cancelled'
   startedAt: string
   endedAt?: string   // NOTE: was "finishedAt" — corrected to match Go backend
   exitCode: number
@@ -106,5 +106,10 @@ export async function triggerJob(jobId: string): Promise<JobRun> {
 
 export async function deleteJob(jobId: string): Promise<void> {
   const res = await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(await res.text())
+}
+
+export async function cancelRun(runId: string): Promise<void> {
+  const res = await fetch(`/api/runs/${runId}/cancel`, { method: 'POST' })
   if (!res.ok) throw new Error(await res.text())
 }

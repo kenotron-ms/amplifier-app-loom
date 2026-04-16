@@ -22,6 +22,7 @@ type Server struct {
 	cfg         *config.Config
 	store       store.Store
 	scheduler   *scheduler.Scheduler
+	runner      *scheduler.Runner
 	broadcaster *scheduler.Broadcaster
 	focusClients *focusRegistry
 	queue       *queue.BoundedQueue
@@ -48,6 +49,12 @@ func NewServer(cfg *config.Config, s store.Store, sched *scheduler.Scheduler, q 
 	}
 	srv.nlClient = nl.NewClientFromConfig(cfg, s, sched)
 	return srv
+}
+
+// SetRunner wires the Runner into the server so run cancellation is possible.
+// Must be called before Start.
+func (s *Server) SetRunner(r *scheduler.Runner) {
+	s.runner = r
 }
 
 // SetMirror wires the mirror subsystem into the server. Called by the daemon
@@ -128,6 +135,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/runs", s.clearRuns)
 	mux.HandleFunc("GET /api/runs/{id}", s.getRun)
 	mux.HandleFunc("GET /api/runs/{id}/stream", s.streamRun)
+	mux.HandleFunc("POST /api/runs/{id}/cancel", s.cancelRun)
 	mux.HandleFunc("GET /api/jobs/{id}/runs", s.listJobRuns)
 
 	// Daemon control

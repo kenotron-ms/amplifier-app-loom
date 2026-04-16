@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import Convert from 'ansi-to-html'
-import { Job, JobRun, listJobRuns, triggerJob } from '../../api/jobs'
+import { Job, JobRun, listJobRuns, triggerJob, cancelRun } from '../../api/jobs'
 import { useRunStream } from './useRunStream'
 import JobConfigModal from './JobConfigModal'
 
@@ -68,6 +68,14 @@ export default function RunDetail({ job, onUpdate }: Props) {
     } catch (e) { console.error('triggerJob:', e) }
   }
 
+  const handleCancel = async () => {
+    if (!activeRunId) return
+    try {
+      await cancelRun(activeRunId)
+      setTimeout(() => refreshRuns(job.id), 600)
+    } catch (e) { console.error('cancelRun:', e) }
+  }
+
   const handleSaved = useCallback((updated: Job) => {
     setEditOpen(false)
     onUpdate(updated)
@@ -95,6 +103,18 @@ export default function RunDetail({ job, onUpdate }: Props) {
         onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-pane-title)'}
         onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-modal)'}
       >▶ Run Now</button>
+      {activeRun?.status === 'running' && (
+        <button
+          onClick={handleCancel}
+          style={{
+            marginLeft: 8, fontSize: 11, padding: '4px 12px',
+            background: 'var(--bg-modal)', border: '1px solid var(--border-dark)',
+            borderRadius: 3, color: 'var(--red)', cursor: 'pointer',
+          }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-pane-title)'}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-modal)'}
+        >⏹ Cancel</button>
+      )}
       <button
         onClick={() => setEditOpen(true)}
         style={{
@@ -129,10 +149,11 @@ export default function RunDetail({ job, onUpdate }: Props) {
             </div>
           )}
           {runs.map(run => {
-            const isActive  = activeRunId === run.id
-            const isRunning = run.status === 'running'
-            const isSuccess = run.status === 'success'
-            const isFailed  = run.status === 'failed' || run.status === 'timeout'
+            const isActive     = activeRunId === run.id
+            const isRunning    = run.status === 'running'
+            const isSuccess    = run.status === 'success'
+            const isCancelled  = run.status === 'cancelled'
+            const isFailed     = run.status === 'failed' || run.status === 'timeout'
             return (
               <button
                 key={run.id}
@@ -150,9 +171,10 @@ export default function RunDetail({ job, onUpdate }: Props) {
                 {/* Status dot */}
                 <span style={{
                   width: 8, height: 8, borderRadius: '50%', marginTop: 4, flexShrink: 0,
-                  background: isRunning ? 'var(--amber)'
-                    : isSuccess ? 'var(--green)'
-                    : isFailed  ? 'var(--red)'
+                  background: isRunning   ? 'var(--amber)'
+                    : isSuccess           ? 'var(--green)'
+                    : isFailed            ? 'var(--red)'
+                    : isCancelled         ? 'var(--text-muted)'
                     : 'var(--text-very-muted)',
                   animation: isRunning ? 'pulse-dot 1.5s ease-in-out infinite' : 'none',
                 }} />
@@ -173,7 +195,7 @@ export default function RunDetail({ job, onUpdate }: Props) {
                       textTransform: 'uppercase', letterSpacing: '0.04em',
                     }}>{badge.label}</span>
                     <span style={{ fontSize: 10, color: 'var(--text-very-muted)', fontFamily: 'var(--font-mono)' }}>
-                      {isRunning ? 'running…' : formatDuration(run.startedAt, run.endedAt)}
+                      {isRunning ? 'running…' : isCancelled ? 'cancelled' : formatDuration(run.startedAt, run.endedAt)}
                     </span>
                   </div>
                 </div>

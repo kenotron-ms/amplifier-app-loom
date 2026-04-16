@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,10 +22,21 @@ type Runner struct {
 	store       store.Store
 	broadcaster *Broadcaster
 	userCtx     *config.UserContext
+	runCancels  sync.Map // runID → context.CancelFunc
 }
 
 func NewRunner(s store.Store, b *Broadcaster, userCtx *config.UserContext) *Runner {
 	return &Runner{store: s, broadcaster: b, userCtx: userCtx}
+}
+
+// CancelRun cancels the in-flight run with the given ID.
+// Returns true if the run was found and cancelled, false if it was not running.
+func (r *Runner) CancelRun(runID string) bool {
+	if v, ok := r.runCancels.Load(runID); ok {
+		v.(context.CancelFunc)()
+		return true
+	}
+	return false
 }
 
 // userShell returns the shell captured at install time, falling back to $SHELL.
@@ -110,12 +122,16 @@ func (r *Runner) Execute(job *types.Job) {
 
 // runAttempt runs one attempt. Returns true if we should stop retrying.
 func (r *Runner) runAttempt(job *types.Job, attempt int) (stopRetrying bool) {
-	ctx := context.Background()
-	var cancel context.CancelFunc
+	// Always wrap in a cancellable context so CancelRun can interrupt this run.
+	baseCtx, baseCancel := context.WithCancel(context.Background())
+	defer baseCancel()
+
+	ctx := baseCtx
 	if job.Timeout != "" {
 		if d, err := time.ParseDuration(job.Timeout); err == nil && d > 0 {
-			ctx, cancel = context.WithTimeout(ctx, d)
-			defer cancel()
+			var timeoutCancel context.CancelFunc
+			ctx, timeoutCancel = context.WithTimeout(baseCtx, d)
+			defer timeoutCancel()
 		}
 	}
 
@@ -128,6 +144,10 @@ func (r *Runner) runAttempt(job *types.Job, attempt int) (stopRetrying bool) {
 		Attempt:   attempt,
 	}
 	_ = r.store.SaveRun(context.Background(), run)
+
+	// Register the cancel func so CancelRun can reach it by run ID.
+	r.runCancels.Store(run.ID, baseCancel)
+	defer r.runCancels.Delete(run.ID)
 
 	if r.broadcaster != nil {
 		r.broadcaster.Register(run.ID)
@@ -157,11 +177,20 @@ func (r *Runner) runAttempt(job *types.Job, attempt int) (stopRetrying bool) {
 	run.Output = capOutput(output)
 	run.ExitCode = exitCode
 
-	if ctx.Err() == context.DeadlineExceeded {
+	// Distinguish user cancellation from timeout from normal failure.
+	switch ctx.Err() {
+	case context.DeadlineExceeded:
 		run.Status = types.RunStatusTimeout
 		slog.Warn("job timed out", "job", job.Name, "attempt", attempt)
+		_ = r.store.SaveRun(context.Background(), run)
 		return true
+	case context.Canceled:
+		run.Status = types.RunStatusCancelled
+		slog.Info("job cancelled", "job", job.Name, "attempt", attempt)
+		_ = r.store.SaveRun(context.Background(), run)
+		return true // do not retry a cancelled run
 	}
+
 	if runErr != nil {
 		run.Status = types.RunStatusFailed
 		slog.Warn("job failed", "job", job.Name, "attempt", attempt, "err", runErr)

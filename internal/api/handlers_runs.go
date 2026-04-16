@@ -7,6 +7,30 @@ import (
 	"github.com/ms/amplifier-app-loom/internal/types"
 )
 
+func (s *Server) cancelRun(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	// Verify the run exists.
+	run, err := s.store.GetRun(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "run not found")
+		return
+	}
+
+	// Only running runs can be cancelled.
+	if run.Status != types.RunStatusRunning {
+		writeError(w, http.StatusConflict, "run is not currently running")
+		return
+	}
+
+	if s.runner == nil || !s.runner.CancelRun(id) {
+		writeError(w, http.StatusConflict, "run is not currently running")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
+}
+
 func (s *Server) listRuns(w http.ResponseWriter, r *http.Request) {
 	limit := 50
 	if l := r.URL.Query().Get("limit"); l != "" {
