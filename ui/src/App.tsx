@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import ProjectsGrid from './views/projects'
 import ProjectDetail from './views/projects/ProjectDetail'
 import JobsView from './views/jobs'
@@ -63,15 +63,6 @@ export default function App() {
   const [showFeedback, setShowFeedback] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
-
-  // Subscribe to the server-sent focus stream. When the tray's "Open Dashboard"
-  // is clicked and this tab is already open, the server broadcasts a "focus" event
-  // here instead of opening a new browser window.
-  useEffect(() => {
-    const es = new EventSource('/api/ui/focus')
-    es.addEventListener('focus', () => { window.focus() })
-    return () => es.close()
-  }, [])
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg-page)' }}>

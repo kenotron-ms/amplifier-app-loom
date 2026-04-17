@@ -4,7 +4,6 @@ package tray
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -187,9 +186,7 @@ func onReady(port int) {
 	for {
 		select {
 		case <-mOpenUI.ClickedCh:
-			if !focusDashboard(port) {
-				openBrowser(fmt.Sprintf("http://localhost:%d", port))
-			}
+			openBrowser(fmt.Sprintf("http://localhost:%d", port))
 
 		case <-mStart.ClickedCh:
 			// Handle the post-uninstall case: if the plist is gone, install
@@ -485,21 +482,4 @@ func openBrowser(url string) {
 	_ = exec.Command(cmd, url).Start()
 }
 
-// focusDashboard posts to /api/ui/focus to signal any open browser tab to bring
-// itself forward. Returns true if at least one tab was reached, meaning we don't
-// need to open a new browser window.
-func focusDashboard(port int) bool {
-	url := fmt.Sprintf("http://localhost:%d/api/ui/focus", port)
-	resp, err := http.Post(url, "application/json", nil) //nolint:noctx
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	var body struct {
-		Clients int `json:"clients"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return false
-	}
-	return body.Clients > 0
-}
+
