@@ -14,7 +14,8 @@ import (
 
 // registryCmd is the parent command for browsing the bundle registry.
 var registryCmd = &cobra.Command{
-	Use:   "registry",
+	Use:     "registry",
+	Aliases: []string{"reg"},
 	Short: "Browse the Amplifier bundle registry",
 	Long: `Search and browse the Amplifier bundle registry — both the public community
 registry and your private local index (from 'loom index scan').
