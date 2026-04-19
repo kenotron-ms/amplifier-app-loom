@@ -4,7 +4,7 @@ root = "."
 tmp_dir = ".air_tmp"
 
 [build]
-  cmd      = "CGO_ENABLED=1 go build -ldflags \"-X github.com/ms/amplifier-app-loom/internal/api.Version=dev -s -w\" -o dist/loom ./cmd/loom/"
+  cmd      = "CGO_ENABLED=1 go build -ldflags \"-X github.com/ms/amplifier-app-loom/internal/api.Version=99.0.0-dev -s -w\" -o dist/loom ./cmd/loom/"
   bin      = "dist/loom"
   full_bin = "make app-sync"
 

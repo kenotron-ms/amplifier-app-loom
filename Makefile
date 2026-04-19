@@ -27,7 +27,8 @@ run: build
 # make app-sync — fast path used by air: drop new binary → re-sign → relaunch
 # make dev      — bootstrap Loom.app then watch: .go save → rebuild → relaunch
 
-app: build
+app: ui $(DIST)
+	CGO_ENABLED=1 go build -ldflags "-X $(MODULE)/internal/api.Version=99.0.0-dev -s -w" -o $(DIST)/$(BINARY) ./cmd/loom/
 	@rm -rf dist/Loom.app
 	@mkdir -p dist/Loom.app/Contents/MacOS dist/Loom.app/Contents/Resources
 	@cp dist/loom dist/Loom.app/Contents/MacOS/loom
