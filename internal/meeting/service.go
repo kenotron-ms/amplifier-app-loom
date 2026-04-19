@@ -201,16 +201,16 @@ func (s *Service) handleEvent(e *sh.Event) {
 
 	case sh.RecordingEnded:
 		slog.Info("meeting: recording ended", "app", e.App)
-		// WAV is still being written — show a brief "Saving..." state while we wait
-		// for RecordingReady to fire with the file path.
+
+	case sh.MeetingEnded:
+		slog.Info("meeting: ended", "app", e.App)
+		// If we were recording, tell the overlay so it stops showing "Recording..."
+		// RecordingReady will fire shortly with the WAV path to replace this state.
 		if s.State() == StateRecording {
 			if ov, ok := s.notify.(interface{ ShowSaving() }); ok {
 				ov.ShowSaving()
 			}
 		}
-
-	case sh.MeetingEnded:
-		slog.Info("meeting: ended", "app", e.App)
 		if s.State() != StateTranscribing {
 			s.setState(StateMonitoring)
 		}
