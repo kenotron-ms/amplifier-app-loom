@@ -60,6 +60,8 @@
     			go overlayOpenFile(p)
     		}
     		go overlayHide()
+    	case "open_settings":
+    		go overlayOpenFile("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
     	}
     }
     

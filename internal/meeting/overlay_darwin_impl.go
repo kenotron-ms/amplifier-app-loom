@@ -298,6 +298,19 @@
     	})
     }
 
+    // ShowPermissionNeeded tells the user Screen Recording permission is required.
+    func (n *overlayNotifier) ShowPermissionNeeded() {
+    	showOverlay(overlayState{
+    		Title:   "Screen Recording permission needed",
+    		Sub:     "Required to capture meeting audio",
+    		Dot:     "yellow",
+    		Buttons: []overlayButton{
+    			{Label: "Open Settings", Action: "open_settings", Primary: true},
+    			{Label: "Dismiss", Action: "dismiss"},
+    		},
+    	})
+    }
+
     // ShowError surfaces a side-huddle error in the overlay and auto-dismisses.
     func (n *overlayNotifier) ShowError(msg string) {
     	showOverlay(overlayState{

@@ -52,12 +52,13 @@ type Service struct {
 	notify Notifier
 	trans  *Transcriber
 
-	newListener listenerFactory
-	mu          sync.Mutex
-	state       State
-	listener    *sh.Listener
-	recStart    time.Time
-	cfg         Config
+	newListener     listenerFactory
+	mu              sync.Mutex
+	state           State
+	listener        *sh.Listener
+	recStart        time.Time
+	cfg             Config
+	screenCapture   sh.PermStatus // updated from PermissionStatus events
 }
 
 // NewService creates a Service. trans may be nil (disables transcription step).
@@ -163,18 +164,48 @@ func (s *Service) startMonitoring(cfg Config) error {
 }
 
 func (s *Service) handleEvent(e *sh.Event) {
-	// Log every event so we can trace the real lifecycle.
-	slog.Info("meeting: event", "kind", e.Kind, "app", e.App, "path", e.Path)
+	// Log every event with all relevant fields.
+	slog.Info("meeting: event", "kind", e.Kind, "app", e.App, "path", e.Path,
+		"permission", e.Permission, "perm_status", e.PermStatus)
 
 	switch e.Kind {
+	case sh.PermissionStatus:
+		if e.Permission == sh.ScreenCapture {
+			s.mu.Lock()
+			s.screenCapture = e.PermStatus
+			s.mu.Unlock()
+			slog.Info("meeting: screen capture permission", "status", e.PermStatus)
+		}
+
 	case sh.MeetingDetected:
+		s.mu.Lock()
+		sc := s.screenCapture
+		s.mu.Unlock()
+
+		if sc == sh.Denied {
+			// Screen Recording was explicitly denied — tell the overlay and bail.
+			if ov, ok := s.notify.(interface{ ShowPermissionNeeded() }); ok {
+				ov.ShowPermissionNeeded()
+			}
+			return
+		}
+
 		s.notify.MeetingDetected(e.App, func(record bool) {
 			if record {
 				s.mu.Lock()
 				l := s.listener
+				sc := s.screenCapture
 				s.mu.Unlock()
+
+				if sc == sh.Denied {
+					if ov, ok := s.notify.(interface{ ShowPermissionNeeded() }); ok {
+						ov.ShowPermissionNeeded()
+					}
+					return
+				}
+
 				if l != nil {
-					l.Record()
+					l.Record() // first call triggers macOS mic permission prompt
 				}
 			}
 		})
