@@ -3,6 +3,7 @@ package meeting_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	bolt "go.etcd.io/bbolt"
@@ -38,6 +39,18 @@ func TestConfig_DefaultsDisabled(t *testing.T) {
 	}
 	if cfg.Model != "whisper-1" {
 		t.Errorf("expected Model=whisper-1, got %q", cfg.Model)
+	}
+}
+
+// TestDefaultConfig_OutputDirAbsoluteWhenHomeMissing verifies that DefaultConfig
+// never returns a relative OutputDir — even when $HOME is empty and
+// os.UserHomeDir() falls back (or fails). The old code silently set home=""
+// producing the relative path "meetings"; the fixed code uses os.TempDir().
+func TestDefaultConfig_OutputDirAbsoluteWhenHomeMissing(t *testing.T) {
+	t.Setenv("HOME", "")
+	cfg := meeting.DefaultConfig()
+	if !filepath.IsAbs(cfg.OutputDir) {
+		t.Errorf("OutputDir must be absolute, got %q (would silently land in the process cwd)", cfg.OutputDir)
 	}
 }
 

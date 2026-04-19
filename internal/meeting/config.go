@@ -22,8 +22,12 @@ type Config struct {
 }
 
 // DefaultConfig returns the default config (disabled, ~/meetings, whisper-1).
+// If os.UserHomeDir fails it falls back to os.TempDir so OutputDir is always absolute.
 func DefaultConfig() Config {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = os.TempDir()
+	}
 	return Config{
 		Enabled:   false,
 		OutputDir: filepath.Join(home, "meetings"),
