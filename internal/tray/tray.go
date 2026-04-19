@@ -118,7 +118,8 @@ func onReady(port int) {
 	go func() {
 		// Open a dedicated bbolt handle for meeting config
 		// (the tray's existing store is scoped to the onboarding check above)
-		meetingDB, err := bolt.Open(platform.DBPath(), 0o600, &bolt.Options{Timeout: 2 * time.Second})
+		meetingDBPath := filepath.Join(platform.DataDir(), "meeting.db")
+			meetingDB, err := bolt.Open(meetingDBPath, 0o600, &bolt.Options{Timeout: 2 * time.Second})
 		if err != nil {
 			slog.Error("tray: meeting: open db", "err", err)
 			return
