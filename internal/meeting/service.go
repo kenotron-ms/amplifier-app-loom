@@ -36,16 +36,6 @@ func (s State) String() string {
 	return "unknown"
 }
 
-// Transcriber handles the transcription step (Whisper API call, markdown writing).
-// A nil *Transcriber disables transcription.
-type Transcriber struct{}
-
-// Transcribe sends wavPath to the configured Whisper model and writes a markdown
-// file alongside the WAV. It returns the path to the markdown file.
-func (t *Transcriber) Transcribe(_ context.Context, _ string, _ Config) (string, error) {
-	return "", fmt.Errorf("transcriber: not implemented")
-}
-
 // listenerFactory creates a side-huddle listener for a given output directory.
 // Overridable in tests via SetListenerFactory.
 type listenerFactory func(outputDir string) (*sh.Listener, error)
