@@ -57,5 +57,6 @@ func init() {
 		connectorCmd,  // connector subcommands: add, list, remove
 		bundleCmd,     // bundle subcommands: install, add, list, remove
 		indexCmd,      // index subcommands: scan, list, status, watch, unwatch
+		registryCmd,   // registry subcommands: list, search, show
 	)
 }
