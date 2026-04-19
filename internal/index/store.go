@@ -78,3 +78,36 @@ func SaveState(dir string, st *StateFile) error {
 	}
 	return os.WriteFile(filepath.Join(dir, "state.json"), data, 0644)
 }
+
+// ── Sources config ─────────────────────────────────────────────────────────────
+
+const sourcesFile = "sources.json"
+
+// LoadSources reads sources.json from dir, returning an empty Sources if absent.
+func LoadSources(dir string) (*Sources, error) {
+	path := filepath.Join(dir, sourcesFile)
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return &Sources{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var s Sources
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// SaveSources writes sources.json to dir.
+func SaveSources(dir string, s *Sources) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, sourcesFile), append(data, '\n'), 0o644)
+}

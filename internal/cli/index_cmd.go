@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os/exec"
+	"strings"
 	"net/http"
 	"os"
 	"sort"
-	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -42,14 +43,12 @@ Token resolution order: GITHUB_TOKEN env var → gh auth token → unauthenticat
 With a token the scan runs at ~50 ms/call; without one it drops to 1.2 s/call
 to respect GitHub's anonymous rate limits.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		limit, _ := cmd.Flags().GetInt("limit")
 		force, _ := cmd.Flags().GetBool("force")
 		includeArchived, _ := cmd.Flags().GetBool("include-archived")
 		quiet, _ := cmd.Flags().GetBool("quiet")
 
 		dir := index.DefaultDir()
 		opts := index.ScanOptions{
-			Limit:           limit,
 			Force:           force,
 			IncludeArchived: includeArchived,
 			Quiet:           quiet,
@@ -356,6 +355,70 @@ var indexUnwatchCmd = &cobra.Command{
 	},
 }
 
+// ── index init ────────────────────────────────────────────────────────────────
+
+var indexInitCmd = &cobra.Command{
+	Use:   "init",
+	Short: "Create sources.json to configure which repos to scan",
+	Long: `Creates ~/.amplifier/bundle-index/sources.json — a local, non-git-tracked
+config that tells 'loom index scan' which GitHub repos to sweep.
+
+Seeded with the MADE team feed from microsoft-amplifier/amplifier-shared
+plus your own GitHub handle (for private repo access).
+
+Edit the file to add more handles or specific repos.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		dir := index.DefaultDir()
+
+		existing, err := index.LoadSources(dir)
+		if err != nil {
+			return err
+		}
+		if len(existing.TeamFeeds) > 0 || len(existing.ExtraHandles) > 0 || len(existing.ExtraRepos) > 0 {
+			fmt.Printf("sources.json already exists at:\n  %s/sources.json\n\n", dir)
+			for _, f := range existing.TeamFeeds {
+				fmt.Printf("  team feed:  %s\n", f.Name)
+			}
+			if len(existing.ExtraHandles) > 0 {
+				fmt.Printf("  handles:    %v\n", existing.ExtraHandles)
+			}
+			if len(existing.ExtraRepos) > 0 {
+				fmt.Printf("  repos:      %v\n", existing.ExtraRepos)
+			}
+			fmt.Printf("\nEdit directly to add more sources:\n  %s/sources.json\n", dir)
+			return nil
+		}
+
+		own := ""
+		if out, err := exec.Command("gh", "api", "user", "--jq", ".login").Output(); err == nil {
+			own = strings.TrimSpace(string(out))
+		}
+
+		src := &index.Sources{
+			TeamFeeds: []index.TeamFeed{{
+				Name: "MADE team",
+				URL:  "https://raw.githubusercontent.com/microsoft-amplifier/amplifier-shared/main/made-team.json",
+			}},
+		}
+		if own != "" {
+			src.ExtraHandles = []string{own}
+		}
+
+		if err := index.SaveSources(dir, src); err != nil {
+			return err
+		}
+
+		fmt.Printf("\u2713 Created %s/sources.json\n\n", dir)
+		fmt.Printf("Configured:\n")
+		fmt.Printf("  Team feed:  MADE team (microsoft-amplifier/amplifier-shared)\n")
+		if own != "" {
+			fmt.Printf("  Handle:     %s (includes your private repos)\n", own)
+		}
+		fmt.Printf("\nRun:\n  loom index scan\n")
+		return nil
+	},
+}
+
 // ── init ──────────────────────────────────────────────────────────────────────
 
 func init() {
@@ -378,6 +441,7 @@ func init() {
 	indexWatchCmd.Flags().String("every", "2h", "Scan interval (e.g. 30m, 2h)")
 
 	indexCmd.AddCommand(
+		indexInitCmd,
 		indexScanCmd,
 		indexListCmd,
 		indexStatusCmd,

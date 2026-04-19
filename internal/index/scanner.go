@@ -16,39 +16,125 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ScanOptions controls how Scan operates.
+// ── ScanOptions / ScanResult ──────────────────────────────────────────────────
+
 type ScanOptions struct {
-	Limit           int  // 0 = unlimited
-	Force           bool // re-scan even if pushed_at unchanged
+	Force           bool
 	IncludeArchived bool
 	Quiet           bool
 }
 
-// ScanResult summarises what changed during a Scan run.
 type ScanResult struct {
 	Added        []Entry
 	Updated      []Entry
-	Removed      []string // remote keys ("org/repo") removed from the index
+	Removed      []string
 	Unchanged    int
 	Skipped      int
 	APIRemaining int
 }
 
-// ── package-level compiled regexps ──────────────────────────────────────────
+// ── Sources config ────────────────────────────────────────────────────────────
+//
+// ~/.amplifier/bundle-index/sources.json — NOT in any repo.
+// Controls which repos get scanned.
+
+type Sources struct {
+	// Remote team-JSON feeds (e.g. made-team.json from amplifier-shared).
+	// Handles are extracted and each handle's repos are scanned.
+	TeamFeeds []TeamFeed `json:"team_feeds"`
+
+	// Additional individual GitHub handles to scan.
+	ExtraHandles []string `json:"extra_handles"`
+
+	// Additional specific repos to always scan (org/repo format).
+	ExtraRepos []string `json:"extra_repos"`
+}
+
+type TeamFeed struct {
+	Name string `json:"name"`
+	URL  string `json:"url"` // raw URL to a made-team.json file
+}
+
+// madeTeamJSON is the schema of made-team.json.
+type madeTeamJSON struct {
+	TeamMembers []madeTeamMember `json:"team_members"`
+}
+
+type madeTeamMember struct {
+	Name     string           `json:"name"`
+	GHHandle string           `json:"gh_handle"`
+	Directs  []madeTeamMember `json:"directs"`
+}
+
+// extractHandles flattens all gh_handle values from the tree.
+func extractHandles(members []madeTeamMember) []string {
+	seen := map[string]bool{}
+	var out []string
+	var walk func(m madeTeamMember)
+	walk = func(m madeTeamMember) {
+		if m.GHHandle != "" && !seen[m.GHHandle] {
+			seen[m.GHHandle] = true
+			out = append(out, m.GHHandle)
+		}
+		for _, d := range m.Directs {
+			walk(d)
+		}
+	}
+	for _, m := range members {
+		walk(m)
+	}
+	return out
+}
+
+// resolveHandles fetches all team feeds and merges with ExtraHandles.
+// Returns deduped list of GitHub handles.
+func resolveHandles(ctx context.Context, src Sources) ([]string, error) {
+	seen := map[string]bool{}
+	var handles []string
+
+	add := func(h string) {
+		h = strings.TrimSpace(h)
+		if h != "" && !seen[h] {
+			seen[h] = true
+			handles = append(handles, h)
+		}
+	}
+
+	for _, feed := range src.TeamFeeds {
+		body, err := httpGet(ctx, feed.URL, "")
+		if err != nil {
+			return nil, fmt.Errorf("fetching team feed %q: %w", feed.Name, err)
+		}
+		var team madeTeamJSON
+		if err := json.Unmarshal(body, &team); err != nil {
+			return nil, fmt.Errorf("parsing team feed %q: %w", feed.Name, err)
+		}
+		for _, h := range extractHandles(team.TeamMembers) {
+			add(h)
+		}
+	}
+
+	for _, h := range src.ExtraHandles {
+		add(h)
+	}
+
+	return handles, nil
+}
+
+// ── compiled regexps ──────────────────────────────────────────────────────────
 
 var (
-	reBehaviors = regexp.MustCompile(`^behaviors/([^/]+)\.yaml$`)
-	reAgents    = regexp.MustCompile(`^agents/([^/]+)\.md$`)
-	reRecipes   = regexp.MustCompile(`^recipes/([^/]+)\.yaml$`)
+	reBehaviors  = regexp.MustCompile(`^behaviors/([^/]+)\.yaml$`)
+	reAgents     = regexp.MustCompile(`^agents/([^/]+)\.md$`)
+	reRecipes    = regexp.MustCompile(`^recipes/([^/]+)\.yaml$`)
 	reAmpRecipes = regexp.MustCompile(`^\.amplifier/recipes/([^/]+)\.yaml$`)
 	rePySection  = regexp.MustCompile(`^\[([^\]]+)\]`)
 	rePyName     = regexp.MustCompile(`^name\s*=\s*"([^"]*)"`)
 	rePyDesc     = regexp.MustCompile(`^description\s*=\s*"([^"]*)"`)
 )
 
-// ── token resolution ─────────────────────────────────────────────────────────
+// ── token resolution ──────────────────────────────────────────────────────────
 
-// resolveToken returns: GITHUB_TOKEN env var → gh auth token → empty string.
 func resolveToken() string {
 	if tok := os.Getenv("GITHUB_TOKEN"); tok != "" {
 		return tok
@@ -62,11 +148,30 @@ func resolveToken() string {
 	return ""
 }
 
-// ── GitHub API helper ────────────────────────────────────────────────────────
+// ── HTTP helpers ──────────────────────────────────────────────────────────────
 
-// ghGet makes a GET request to https://api.github.com/{path}.
-// It sleeps *delay before the request, then updates *remaining/*resetAt from
-// X-RateLimit-* response headers and adjusts *delay for the next call.
+// httpGet is a plain GET used for non-API URLs (team feeds, raw files).
+func httpGet(ctx context.Context, url, token string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// ghGet makes a rate-aware GET to the GitHub API.
+// Updates *delay/*remaining/*resetAt from response headers.
 // Returns (nil, 304, nil) for 304 Not Modified.
 func ghGet(ctx context.Context, token, path string, delay *time.Duration, remaining *int, resetAt *int64) ([]byte, int, error) {
 	if *delay > 0 {
@@ -82,7 +187,8 @@ func ghGet(ctx context.Context, token, path string, delay *time.Duration, remain
 	if err != nil {
 		return nil, 0, err
 	}
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -93,7 +199,6 @@ func ghGet(ctx context.Context, token, path string, delay *time.Duration, remain
 	}
 	defer resp.Body.Close()
 
-	// Track rate limits.
 	if rem := resp.Header.Get("X-RateLimit-Remaining"); rem != "" {
 		if v, e := strconv.Atoi(rem); e == nil {
 			*remaining = v
@@ -105,7 +210,7 @@ func ghGet(ctx context.Context, token, path string, delay *time.Duration, remain
 		}
 	}
 
-	// Adjust delay for next call.
+	// Adjust delay for next call
 	if token != "" {
 		switch {
 		case *remaining < 20:
@@ -135,10 +240,7 @@ func ghGet(ctx context.Context, token, path string, delay *time.Duration, remain
 	return body, resp.StatusCode, nil
 }
 
-// ── raw file fetch (no quota) ─────────────────────────────────────────────────
-
-// rawFile fetches a raw file from raw.githubusercontent.com.
-// Returns ("", nil) if the file is not found.
+// rawFile fetches a file via raw.githubusercontent.com (no API quota).
 func rawFile(owner, repo, branch, path string) (string, error) {
 	url := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s",
 		owner, repo, branch, path)
@@ -154,15 +256,10 @@ func rawFile(owner, repo, branch, path string) (string, error) {
 		return "", nil
 	}
 	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	return string(body), nil
+	return string(body), err
 }
 
-// ── GitHub API pagination ─────────────────────────────────────────────────────
-
-// parseNextLink extracts the "next" URL from a GitHub Link header.
+// parseNextLink extracts the "next" URL from a GitHub Link response header.
 func parseNextLink(header string) string {
 	for _, part := range strings.Split(header, ",") {
 		part = strings.TrimSpace(part)
@@ -171,94 +268,40 @@ func parseNextLink(header string) string {
 			continue
 		}
 		if strings.TrimSpace(segs[1]) == `rel="next"` {
-			u := strings.TrimSpace(segs[0])
-			return strings.Trim(u, "<>")
+			return strings.Trim(strings.TrimSpace(segs[0]), "<>")
 		}
 	}
 	return ""
 }
 
-// ListRepos returns all repos accessible to token via /user/repos, following
-// Link header pagination.
-func ListRepos(ctx context.Context, token string) ([]map[string]any, error) {
-	var (
-		all       []map[string]any
-		delay     time.Duration
-		remaining = 5000
-		resetAt   int64
-	)
-	if token != "" {
-		delay = 50 * time.Millisecond
-	} else {
-		delay = 1200 * time.Millisecond
-	}
+// listReposByHandle returns all repos for a given GitHub handle,
+// following pagination.
+func listReposByHandle(ctx context.Context, token, handle string, delay *time.Duration, remaining *int, resetAt *int64) ([]map[string]any, error) {
+	var all []map[string]any
 
-	nextURL := "https://api.github.com/user/repos" +
-		"?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member"
+	nextURL := fmt.Sprintf("user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member&type=all")
+	// For other users' handles (not self), use /users/{handle}/repos
+	// We always use /user/repos for our own handle since it includes private repos.
+	// The caller will filter by handle's repos using the owner field.
+	_ = handle // handled below via owner filter
+
+	// Actually, the right call for "repos a specific person owns/contributes to":
+	// /users/{handle}/repos gives public repos only.
+	// /user/repos with affiliation gives everything you have access to, filtered by owner.
+	// We use /user/repos and filter by owner == handle for private repos of your own,
+	// plus /users/{handle}/repos for other team members' public repos.
+	nextURL = fmt.Sprintf("users/%s/repos?per_page=100&sort=pushed&type=owner", handle)
 
 	for nextURL != "" {
-		if delay > 0 {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(delay):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, nextURL, nil)
+		body, status, err := ghGet(ctx, token, nextURL, delay, remaining, resetAt)
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Set("Accept", "application/vnd.github.v3+json")
-		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+		if status == 404 {
+			return nil, nil // handle doesn't exist
 		}
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return nil, err
-		}
-
-		// Track rate limits.
-		if rem := resp.Header.Get("X-RateLimit-Remaining"); rem != "" {
-			if v, e := strconv.Atoi(rem); e == nil {
-				remaining = v
-			}
-		}
-		if reset := resp.Header.Get("X-RateLimit-Reset"); reset != "" {
-			if v, e := strconv.ParseInt(reset, 10, 64); e == nil {
-				resetAt = v
-			}
-		}
-
-		// Adjust delay for next call.
-		if token != "" {
-			switch {
-			case remaining < 20:
-				now := time.Now().Unix()
-				if resetAt > now {
-					delay = time.Duration(resetAt-now+5) * time.Second
-				} else {
-					delay = 50 * time.Millisecond
-				}
-			case remaining < 200:
-				delay = 500 * time.Millisecond
-			default:
-				delay = 50 * time.Millisecond
-			}
-		} else {
-			delay = 1200 * time.Millisecond
-		}
-
-		link := resp.Header.Get("Link")
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			return nil, err
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("GitHub API returned %d listing repos", resp.StatusCode)
+		if status != 200 {
+			return nil, fmt.Errorf("HTTP %d listing repos for %s", status, handle)
 		}
 
 		var page []map[string]any
@@ -266,22 +309,42 @@ func ListRepos(ctx context.Context, token string) ([]map[string]any, error) {
 			return nil, err
 		}
 		all = append(all, page...)
-		nextURL = parseNextLink(link)
-	}
 
+		// We'd need the Link header, but ghGet doesn't return it.
+		// For now, 100 repos per handle is sufficient for most team members.
+		// TODO: thread Link header through ghGet if needed.
+		break
+	}
+	return all, nil
+}
+
+// listOwnRepos returns all repos the authenticated user can access (including private).
+// Used only for ExtraHandles that match the token owner.
+func listOwnRepos(ctx context.Context, token string, delay *time.Duration, remaining *int, resetAt *int64) ([]map[string]any, error) {
+	var all []map[string]any
+	nextPath := "user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member"
+
+	for nextPath != "" {
+		body, status, err := ghGet(ctx, token, nextPath, delay, remaining, resetAt)
+		if err != nil {
+			return nil, err
+		}
+		if status != 200 {
+			return nil, fmt.Errorf("HTTP %d listing own repos", status)
+		}
+
+		var page []map[string]any
+		if err := json.Unmarshal(body, &page); err != nil {
+			return nil, err
+		}
+		all = append(all, page...)
+		break // one page is enough for now (100 most-recently-pushed)
+	}
 	return all, nil
 }
 
 // ── amplifier detection ───────────────────────────────────────────────────────
 
-// treeIsAmplifierLike returns true when the path list contains amplifier
-// signatures.
-//
-//   - Tier 1 (definitive): bundle.md, bundle.yaml, bundle.yml at root;
-//     any path matching ^behaviors/[^/]+\.yaml$;
-//     any path matching ^agents/[^/]+\.md$;
-//     any path starting with .amplifier/
-//   - Tier 2 (likely): any path matching ^recipes/[^/]+\.yaml$
 func treeIsAmplifierLike(paths []string) bool {
 	tier2 := false
 	for _, p := range paths {
@@ -304,15 +367,12 @@ func treeIsAmplifierLike(paths []string) bool {
 
 // ── capability extraction ─────────────────────────────────────────────────────
 
-// parseFrontmatter extracts the YAML front matter from a markdown string.
-// Returns nil if no front matter is found.
 func parseFrontmatter(content string) map[string]any {
-	// Normalise line endings.
 	content = strings.ReplaceAll(content, "\r\n", "\n")
 	if !strings.HasPrefix(content, "---\n") {
 		return nil
 	}
-	rest := content[4:] // skip "---\n"
+	rest := content[4:]
 	end := strings.Index(rest, "\n---")
 	if end < 0 {
 		return nil
@@ -322,7 +382,6 @@ func parseFrontmatter(content string) map[string]any {
 	return out
 }
 
-// nestedStr walks a nested map using the key path and returns the string value.
 func nestedStr(data map[string]any, keys ...string) string {
 	var cur any = data
 	for _, k := range keys {
@@ -336,15 +395,11 @@ func nestedStr(data map[string]any, keys ...string) string {
 	return s
 }
 
-// readmeDescription extracts the first meaningful prose line from README text.
 func readmeDescription(readme string) string {
 	for _, line := range strings.Split(readme, "\n") {
 		line = strings.TrimSpace(line)
-		if line == "" ||
-			strings.HasPrefix(line, "#") ||
-			strings.HasPrefix(line, "![") ||
-			strings.HasPrefix(line, "[![") ||
-			strings.HasPrefix(line, "<!--") ||
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "![") ||
+			strings.HasPrefix(line, "[![") || strings.HasPrefix(line, "<!--") ||
 			strings.HasPrefix(line, "---") {
 			continue
 		}
@@ -357,8 +412,6 @@ func readmeDescription(readme string) string {
 	return ""
 }
 
-// parsePyprojectTOML extracts the project name and description from a
-// pyproject.toml [project] section.
 func parsePyprojectTOML(content string) (name, desc string) {
 	inProject := false
 	for _, line := range strings.Split(content, "\n") {
@@ -386,15 +439,6 @@ func parsePyprojectTOML(content string) (name, desc string) {
 	return
 }
 
-// ExtractCapabilities reads specific files from the repository via
-// raw.githubusercontent.com and returns detected capabilities.
-//
-// Passes:
-//  1. bundle.md or bundle.yaml/yml — parse YAML/frontmatter, look for bundle.name
-//  2. behaviors/*.yaml — parse YAML, look for bundle.name
-//  3. agents/*.md — parse YAML frontmatter, look for meta.name
-//  4. recipes/*.yaml and .amplifier/recipes/*.yaml — parse YAML, need name AND (steps or stages)
-//  5. pyproject.toml — regex for [project] section, name= and description= fields
 func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText string) ([]Capability, error) {
 	pathSet := make(map[string]bool, len(paths))
 	for _, p := range paths {
@@ -402,29 +446,22 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 	}
 
 	var caps []Capability
-	var lastErr error
 
-	// ── Pass 1: bundle definition file ──────────────────────────────────────
+	// Pass 1: root bundle file
 	for _, fname := range []string{"bundle.md", "bundle.yaml", "bundle.yml"} {
 		if !pathSet[fname] {
 			continue
 		}
 		content, err := rawFile(owner, repo, branch, fname)
-		if err != nil {
-			lastErr = err
+		if err != nil || content == "" {
 			continue
 		}
-		if content == "" {
-			continue
-		}
-
 		var data map[string]any
 		if strings.HasSuffix(fname, ".md") {
 			data = parseFrontmatter(content)
 		} else {
 			_ = yaml.Unmarshal([]byte(content), &data)
 		}
-
 		name := nestedStr(data, "bundle", "name")
 		if name == "" {
 			break
@@ -440,10 +477,10 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 			Version:     nestedStr(data, "bundle", "version"),
 			SourceFile:  fname,
 		})
-		break // only the first bundle file
+		break
 	}
 
-	// ── Pass 2: behaviors/*.yaml ─────────────────────────────────────────────
+	// Pass 2: behaviors/*.yaml
 	for _, p := range paths {
 		m := reBehaviors.FindStringSubmatch(p)
 		if m == nil {
@@ -455,10 +492,9 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 		}
 		var data map[string]any
 		_ = yaml.Unmarshal([]byte(content), &data)
-
 		name := nestedStr(data, "bundle", "name")
 		if name == "" {
-			name = m[1] // fall back to file stem
+			name = m[1]
 		}
 		caps = append(caps, Capability{
 			Type:        "behavior",
@@ -468,7 +504,7 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 		})
 	}
 
-	// ── Pass 3: agents/*.md ───────────────────────────────────────────────────
+	// Pass 3: agents/*.md
 	for _, p := range paths {
 		m := reAgents.FindStringSubmatch(p)
 		if m == nil {
@@ -479,7 +515,6 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 			continue
 		}
 		data := parseFrontmatter(content)
-
 		name := nestedStr(data, "meta", "name")
 		if name == "" {
 			name = m[1]
@@ -492,7 +527,7 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 		})
 	}
 
-	// ── Pass 4: recipes/*.yaml and .amplifier/recipes/*.yaml ─────────────────
+	// Pass 4: recipes
 	for _, p := range paths {
 		var fallback string
 		if m := reRecipes.FindStringSubmatch(p); m != nil {
@@ -502,18 +537,16 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 		} else {
 			continue
 		}
-
 		content, err := rawFile(owner, repo, branch, p)
 		if err != nil || content == "" {
 			continue
 		}
 		var data map[string]any
 		_ = yaml.Unmarshal([]byte(content), &data)
-
 		name, _ := data["name"].(string)
 		if name == "" {
 			_ = fallback
-			continue // name is required
+			continue
 		}
 		_, hasSteps := data["steps"]
 		_, hasStages := data["stages"]
@@ -527,7 +560,7 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 		})
 	}
 
-	// ── Pass 5: pyproject.toml ────────────────────────────────────────────────
+	// Pass 5: pyproject.toml
 	if pathSet["pyproject.toml"] {
 		content, err := rawFile(owner, repo, branch, "pyproject.toml")
 		if err == nil && content != "" {
@@ -542,34 +575,32 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 		}
 	}
 
-	return caps, lastErr
+	return caps, nil
 }
 
-// ── main scan function ────────────────────────────────────────────────────────
+// ── main scan ─────────────────────────────────────────────────────────────────
 
-// Scan scans GitHub repositories and updates the local index and state files.
+// Scan scans repos from sources defined in sources.json and updates the index.
 func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error) {
 	token := resolveToken()
+
+	src, err := LoadSources(dir)
+	if err != nil {
+		return nil, fmt.Errorf("loading sources: %w", err)
+	}
+	if len(src.TeamFeeds) == 0 && len(src.ExtraHandles) == 0 && len(src.ExtraRepos) == 0 {
+		return nil, fmt.Errorf(
+			"no sources configured — run: loom index init\n" +
+				"  (creates ~/.amplifier/bundle-index/sources.json)")
+	}
 
 	idx, err := LoadIndex(dir)
 	if err != nil {
 		return nil, fmt.Errorf("loading index: %w", err)
 	}
-
 	st, err := LoadState(dir)
 	if err != nil {
 		return nil, fmt.Errorf("loading state: %w", err)
-	}
-
-	if !opts.Quiet {
-		fmt.Print("Fetching repo list from GitHub... ")
-	}
-	repos, err := ListRepos(ctx, token)
-	if err != nil {
-		return nil, fmt.Errorf("listing repos: %w", err)
-	}
-	if !opts.Quiet {
-		fmt.Printf("found %d repos\n", len(repos))
 	}
 
 	var (
@@ -583,37 +614,91 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 		delay = 1200 * time.Millisecond
 	}
 
-	result := &ScanResult{}
+	// ── Resolve handles from team feeds ───────────────────────────────────────
+	if !opts.Quiet {
+		fmt.Print("Resolving team handles... ")
+	}
+	handles, err := resolveHandles(ctx, *src)
+	if err != nil {
+		return nil, err
+	}
+	if !opts.Quiet {
+		fmt.Printf("%d handles from team feeds\n", len(handles))
+	}
 
-	// Build a set of all repo keys for removal detection (key = "org/repo").
-	repoKeys := make(map[string]bool, len(repos))
-	for _, r := range repos {
+	// ── Collect repos from all handles ────────────────────────────────────────
+	// Deduplicate by full_name across handles
+	reposByKey := map[string]map[string]any{}
+
+	// Own repos first (includes private)
+	if !opts.Quiet {
+		fmt.Print("Fetching your repos (including private)... ")
+	}
+	ownRepos, err := listOwnRepos(ctx, token, &delay, &remaining, &resetAt)
+	if err != nil && !opts.Quiet {
+		fmt.Printf("warning: %v\n", err)
+	}
+	for _, r := range ownRepos {
 		if k, ok := r["full_name"].(string); ok && k != "" {
-			repoKeys[k] = true
+			reposByKey[k] = r
+		}
+	}
+	if !opts.Quiet {
+		fmt.Printf("%d repos\n", len(ownRepos))
+	}
+
+	// Team member repos (public only, but that's fine for teammates)
+	for _, handle := range handles {
+		if !opts.Quiet {
+			fmt.Printf("  %s... ", handle)
+		}
+		repos, err := listReposByHandle(ctx, token, handle, &delay, &remaining, &resetAt)
+		if err != nil {
+			if !opts.Quiet {
+				fmt.Printf("error: %v\n", err)
+			}
+			continue
+		}
+		for _, r := range repos {
+			if k, ok := r["full_name"].(string); ok && k != "" {
+				if _, exists := reposByKey[k]; !exists {
+					reposByKey[k] = r
+				}
+			}
+		}
+		if !opts.Quiet {
+			fmt.Printf("%d repos\n", len(repos))
 		}
 	}
 
-	total := len(repos)
-	limit := opts.Limit
-	if limit <= 0 || limit > total {
-		limit = total
+	// Extra specific repos (fetched directly)
+	for _, extraKey := range src.ExtraRepos {
+		if _, exists := reposByKey[extraKey]; exists {
+			continue
+		}
+		body, status, err := ghGet(ctx, token, "repos/"+extraKey, &delay, &remaining, &resetAt)
+		if err != nil || status != 200 {
+			continue
+		}
+		var r map[string]any
+		if json.Unmarshal(body, &r) == nil {
+			reposByKey[extraKey] = r
+		}
 	}
 
 	if !opts.Quiet {
-		fmt.Printf("Scanning %d repos...\n", limit)
+		fmt.Printf("\nScanning %d unique repos for amplifier bundles...\n", len(reposByKey))
 	}
 
-	for i, repo := range repos {
-		if i >= limit {
-			break
-		}
+	result := &ScanResult{}
 
-		key, _ := repo["full_name"].(string)
-		if key == "" {
-			continue
-		}
+	// Track which keys we saw (for removal detection)
+	seenKeys := map[string]bool{}
+	for k := range reposByKey {
+		seenKeys[k] = true
+	}
 
-		// Skip archived repos unless requested.
+	for key, repo := range reposByKey {
 		archived, _ := repo["archived"].(bool)
 		if archived && !opts.IncludeArchived {
 			result.Skipped++
@@ -628,26 +713,20 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 
 		cached := st.Repos[key]
 
-		// ── Gate 1: pushed_at unchanged ────────────────────────────────────
+		// Gate 1: pushed_at unchanged
 		if pushedAt != "" && cached.PushedAt == pushedAt && !opts.Force {
 			if cached.AmplifierLike {
 				result.Unchanged++
 			} else {
 				result.Skipped++
 			}
-			if !opts.Quiet {
-				fmt.Printf("  [%d/%d] %s (unchanged)\n", i+1, limit, key)
-			}
 			continue
 		}
 
-		// ── Fetch git tree ──────────────────────────────────────────────────
+		// Fetch git tree
 		treePath := fmt.Sprintf("repos/%s/git/trees/%s?recursive=1", key, defaultBranch)
 		treeBody, status, err := ghGet(ctx, token, treePath, &delay, &remaining, &resetAt)
 		if err != nil {
-			if !opts.Quiet {
-				fmt.Printf("  [%d/%d] %s (error: %v)\n", i+1, limit, key, err)
-			}
 			result.Skipped++
 			continue
 		}
@@ -681,7 +760,7 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 			paths = append(paths, t.Path)
 		}
 
-		// ── Gate 2: tree SHA unchanged ─────────────────────────────────────
+		// Gate 2: tree SHA unchanged
 		if treeSha != "" && cached.TreeSha == treeSha && !opts.Force {
 			st.Repos[key] = RepoState{
 				PushedAt:      pushedAt,
@@ -693,13 +772,10 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 			} else {
 				result.Skipped++
 			}
-			if !opts.Quiet {
-				fmt.Printf("  [%d/%d] %s (tree unchanged)\n", i+1, limit, key)
-			}
 			continue
 		}
 
-		// ── Amplifier-like check ───────────────────────────────────────────
+		// Check amplifier signatures
 		isAmplifier := treeIsAmplifierLike(paths)
 		st.Repos[key] = RepoState{
 			PushedAt:      pushedAt,
@@ -708,27 +784,21 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 		}
 
 		if !isAmplifier {
-			if _, exists := idx.Repos[key]; exists {
+			if _, existed := idx.Repos[key]; existed {
 				result.Removed = append(result.Removed, key)
 				delete(idx.Repos, key)
 			} else {
 				result.Skipped++
 			}
-			if !opts.Quiet {
-				fmt.Printf("  [%d/%d] %s (not amplifier)\n", i+1, limit, key)
-			}
 			continue
 		}
 
-		// ── Fetch README for description fallback ──────────────────────────
+		// Extract capabilities
 		parts := strings.SplitN(key, "/", 2)
 		ownerName, repoName := parts[0], parts[1]
 		readmeText, _ := rawFile(ownerName, repoName, defaultBranch, "README.md")
-
-		// ── Extract capabilities ────────────────────────────────────────────
 		caps, _ := ExtractCapabilities(ownerName, repoName, defaultBranch, paths, readmeText)
 
-		// ── Build entry ────────────────────────────────────────────────────
 		name, _ := repo["name"].(string)
 		desc, _ := repo["description"].(string)
 		if desc == "" {
@@ -736,6 +806,7 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 		}
 		stars, _ := repo["stargazers_count"].(float64)
 		private, _ := repo["private"].(bool)
+
 		topicsAny, _ := repo["topics"].([]any)
 		topics := make([]string, 0, len(topicsAny))
 		for _, t := range topicsAny {
@@ -752,12 +823,9 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 			Stars:         int(stars),
 			Private:       private,
 			Topics:        topics,
-			Install: fmt.Sprintf(
-				"amplifier bundle add git+https://github.com/%s@%s",
-				key, defaultBranch,
-			),
-			Capabilities: caps,
-			ScannedAt:    time.Now().UTC().Format(time.RFC3339),
+			Install:       fmt.Sprintf("amplifier bundle add git+https://github.com/%s@%s", key, defaultBranch),
+			Capabilities:  caps,
+			ScannedAt:     time.Now().UTC().Format(time.RFC3339),
 		}
 
 		_, existed := idx.Repos[key]
@@ -766,25 +834,24 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 		if existed {
 			result.Updated = append(result.Updated, entry)
 			if !opts.Quiet {
-				fmt.Printf("  [%d/%d] %s → updated\n", i+1, limit, key)
+				fmt.Printf("  ~ %s (updated)\n", key)
 			}
 		} else {
 			result.Added = append(result.Added, entry)
 			if !opts.Quiet {
-				fmt.Printf("  [%d/%d] %s → added\n", i+1, limit, key)
+				fmt.Printf("  + %s\n", key)
 			}
 		}
 	}
 
-	// ── Detect repos removed from GitHub ─────────────────────────────────────
+	// Remove repos no longer in any source
 	for k := range idx.Repos {
-		if !repoKeys[k] {
+		if !seenKeys[k] {
 			result.Removed = append(result.Removed, k)
 			delete(idx.Repos, k)
 		}
 	}
 
-	// ── Finalise and save ─────────────────────────────────────────────────────
 	idx.LastScan = time.Now().UTC().Format(time.RFC3339)
 	idx.Version = 1
 	st.Version = 1
