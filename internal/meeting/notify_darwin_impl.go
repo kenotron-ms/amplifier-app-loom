@@ -39,6 +39,12 @@
 
     void meeting_notif_setup(void) {
         dispatch_async(dispatch_get_main_queue(), ^{
+            // UNUserNotificationCenter requires a proper .app bundle.
+            // Skip silently when running as a raw binary (no bundle identifier).
+            if (![[NSBundle mainBundle] bundleIdentifier]) {
+                NSLog(@"meeting: UNUserNotificationCenter unavailable (no bundle ID)");
+                return;
+            }
             _gDelegate = [[_MeetingNotifDelegate alloc] init];
             UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
             [center setDelegate:_gDelegate];
@@ -96,6 +102,7 @@
         NSString *nsCat   = categoryID ? [NSString stringWithUTF8String:categoryID] : nil;
 
         dispatch_async(dispatch_get_main_queue(), ^{
+            if (![[NSBundle mainBundle] bundleIdentifier]) { return; }
             UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
             content.title = nsTitle;
             content.body  = nsBody;
