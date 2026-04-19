@@ -8,6 +8,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/google/uuid v1.6.0
 	github.com/kardianos/service v1.2.4
+	github.com/kenotron-ms/side-huddle v0.0.0-00010101000000-000000000000
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.9
@@ -25,3 +26,5 @@ require (
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
 )
+
+replace github.com/kenotron-ms/side-huddle => /Users/ken/workspace/ms/side-huddle/.worktrees/feat/static-lib
