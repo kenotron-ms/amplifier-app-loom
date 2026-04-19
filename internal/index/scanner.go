@@ -39,7 +39,8 @@ type ScanResult struct {
 // Controls which repos get scanned.
 
 type Sources struct {
-	// Remote team-JSON feeds (e.g. made-team.json from amplifier-shared).
+	// Remote team-JSON feeds. Each URL should point to a JSON file with a
+	// "team_members" array containing "gh_handle" fields (and optional "directs").
 	// Handles are extracted and each handle's repos are scanned.
 	TeamFeeds []TeamFeed `json:"team_feeds"`
 
@@ -52,10 +53,10 @@ type Sources struct {
 
 type TeamFeed struct {
 	Name string `json:"name"`
-	URL  string `json:"url"` // raw URL to a made-team.json file
+	URL  string `json:"url"` // raw URL to a team JSON file
 }
 
-// madeTeamJSON is the schema of made-team.json.
+// madeTeamJSON is the expected schema of a team feed JSON file.
 type madeTeamJSON struct {
 	TeamMembers []madeTeamMember `json:"team_members"`
 }

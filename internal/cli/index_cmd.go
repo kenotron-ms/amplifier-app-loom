@@ -363,8 +363,8 @@ var indexInitCmd = &cobra.Command{
 	Long: `Creates ~/.amplifier/bundle-index/sources.json — a local, non-git-tracked
 config that tells 'loom index scan' which GitHub repos to sweep.
 
-Seeded with the MADE team feed from microsoft-amplifier/amplifier-shared
-plus your own GitHub handle (for private repo access).
+Seeded with your own GitHub handle (for private repo access).
+Edit the file to add team feeds or extra repos.
 
 Edit the file to add more handles or specific repos.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -394,12 +394,7 @@ Edit the file to add more handles or specific repos.`,
 			own = strings.TrimSpace(string(out))
 		}
 
-		src := &index.Sources{
-			TeamFeeds: []index.TeamFeed{{
-				Name: "MADE team",
-				URL:  "https://raw.githubusercontent.com/microsoft-amplifier/amplifier-shared/main/made-team.json",
-			}},
-		}
+		src := &index.Sources{}
 		if own != "" {
 			src.ExtraHandles = []string{own}
 		}
@@ -409,12 +404,13 @@ Edit the file to add more handles or specific repos.`,
 		}
 
 		fmt.Printf("\u2713 Created %s/sources.json\n\n", dir)
-		fmt.Printf("Configured:\n")
-		fmt.Printf("  Team feed:  MADE team (microsoft-amplifier/amplifier-shared)\n")
 		if own != "" {
-			fmt.Printf("  Handle:     %s (includes your private repos)\n", own)
+			fmt.Printf("Configured:\n  Handle: %s (your private repos)\n", own)
 		}
-		fmt.Printf("\nRun:\n  loom index scan\n")
+		fmt.Printf("\nAdd team feeds by editing:\n  %s/sources.json\n\n", dir)
+		fmt.Printf("Example team_feeds entry:\n")
+		fmt.Printf("  {\n    \"name\": \"My team\",\n    \"url\": \"https://raw.githubusercontent.com/org/repo/main/team.json\"\n  }\n\n")
+		fmt.Printf("Then run:\n  loom index scan\n")
 		return nil
 	},
 }
