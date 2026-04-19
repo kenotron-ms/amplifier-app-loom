@@ -38,12 +38,12 @@
     "html,body{background:transparent;width:100%;height:100%;overflow:hidden;"
     "font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;"
     "-webkit-font-smoothing:antialiased}"
-    "#card{position:absolute;top:8px;right:8px;left:8px;"
+    "#card{position:absolute;top:12px;right:20px;left:20px;"
     "background:rgba(28,28,30,0.93);"
     "backdrop-filter:blur(24px) saturate(180%);"
     "-webkit-backdrop-filter:blur(24px) saturate(180%);"
     "border-radius:14px;border:0.5px solid rgba(255,255,255,0.1);"
-    "box-shadow:0 8px 32px rgba(0,0,0,0.6);"
+    "box-shadow:0 4px 20px rgba(0,0,0,0.45);"
     "padding:13px 15px;"
     "transform:translateX(120%) scale(0.95);opacity:0;"
     "transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1),opacity 0.25s ease}"
@@ -65,7 +65,7 @@
     ".p{background:rgba(10,132,255,0.9);color:#fff}"
     ".sec{background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.72)}"
     "</style></head><body>"
-    "<div id='card' onmouseenter=\"s('_mouseenter')\" onmouseleave=\"s('_mouseleave')\">"
+    "<div id='card'>"
     "<div class='row'><div class='dot' id='dot'></div>"
     "<div class='txt'><div class='t' id='ti'></div><div class='s' id='su'></div></div>"
     "<div class='timer' id='tm'></div></div>"
@@ -100,7 +100,7 @@
         if (_gOverlay) return;
 
         NSRect screen = [NSScreen mainScreen].visibleFrame;
-        CGFloat w = 408, h = 148;
+        CGFloat w = 440, h = 152;
         NSRect frame = NSMakeRect(
             NSMaxX(screen) - w - 8,
             NSMaxY(screen) - h - 8,
@@ -117,7 +117,7 @@
         _gOverlay.opaque              = NO;
         _gOverlay.backgroundColor     = [NSColor clearColor];
         _gOverlay.hasShadow           = NO;
-        _gOverlay.ignoresMouseEvents  = YES;  // click-through by default
+        // ignoresMouseEvents intentionally NOT set — NSNonactivatingPanel handles focus correctly
         _gOverlay.collectionBehavior  =
             NSWindowCollectionBehaviorCanJoinAllSpaces |
             NSWindowCollectionBehaviorStationary       |

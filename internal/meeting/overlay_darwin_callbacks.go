@@ -60,10 +60,6 @@
     			go overlayOpenFile(p)
     		}
     		go overlayHide()
-    	case "_mouseenter":
-    		go overlaySetMouseEvents(false)
-    	case "_mouseleave":
-    		go overlaySetMouseEvents(true)
     	}
     }
     
