@@ -14,10 +14,13 @@ import (
 	"strings"
 	"time"
 
+	bolt "go.etcd.io/bbolt"
+
 	"fyne.io/systray"
 	"github.com/kardianos/service"
 
 	"github.com/ms/amplifier-app-loom/internal/api"
+	"github.com/ms/amplifier-app-loom/internal/meeting"
 	"github.com/ms/amplifier-app-loom/internal/config"
 	"github.com/ms/amplifier-app-loom/internal/onboarding"
 	"github.com/ms/amplifier-app-loom/internal/platform"
@@ -103,6 +106,57 @@ func onReady(port int) {
 	// Clicking it opens the settings page to fix the issue.
 	mAPIKeyWarning := systray.AddMenuItem("⚠  API key not set — Open Settings", "Add an Anthropic or OpenAI key to enable AI jobs")
 	mAPIKeyWarning.Hide()
+
+	// ── Meeting transcription toggle ──────────────────────────────────────────
+	systray.AddSeparator()
+	mMeeting := systray.AddMenuItemCheckbox(
+		"Meeting Transcription",
+		"Record and transcribe Teams/Zoom/Meet meetings",
+		false, // initial state, updated in goroutine below
+	)
+
+	go func() {
+		// Open a dedicated bbolt handle for meeting config
+		// (the tray's existing store is scoped to the onboarding check above)
+		meetingDB, err := bolt.Open(platform.DBPath(), 0o600, &bolt.Options{Timeout: 2 * time.Second})
+		if err != nil {
+			slog.Error("tray: meeting: open db", "err", err)
+			return
+		}
+		defer meetingDB.Close()
+
+		meetingStore := meeting.NewConfigStore(meetingDB)
+		cfg, _ := meetingStore.Get(context.Background())
+		if cfg.Enabled {
+			mMeeting.Check()
+		}
+
+		// Start the meeting service
+		notifier := meeting.NewNotifier()
+		notifier.Setup()
+		trans := meeting.NewTranscriber("") // reads OPENAI_API_KEY from env
+		svc := meeting.NewService(meetingStore, notifier, trans)
+		if err := svc.Start(context.Background()); err != nil {
+			slog.Error("tray: meeting: start failed", "err", err)
+		}
+
+		// Handle toggle clicks
+		for range mMeeting.ClickedCh {
+			enabled := !mMeeting.Checked()
+			if err := svc.SetEnabled(context.Background(), enabled); err != nil {
+				slog.Error("tray: meeting: toggle", "err", err)
+				continue
+			}
+			if enabled {
+				mMeeting.Check()
+				slog.Info("tray: meeting transcription enabled")
+			} else {
+				mMeeting.Uncheck()
+				slog.Info("tray: meeting transcription disabled")
+			}
+		}
+	}()
+
 	mUninstall := systray.AddMenuItem("Uninstall Loom…", "Remove the background service and close the tray")
 	mQuit := systray.AddMenuItem("Quit", "Close the tray app (service keeps running)")
 
