@@ -241,11 +241,20 @@ func ghGet(ctx context.Context, token, path string, delay *time.Duration, remain
 	return body, resp.StatusCode, nil
 }
 
-// rawFile fetches a file via raw.githubusercontent.com (no API quota).
-func rawFile(owner, repo, branch, path string) (string, error) {
+// rawFile fetches a file via raw.githubusercontent.com.
+// Pass token for private repo access (sent as Authorization header).
+// No API quota cost for public repos; private repos require authentication.
+func rawFile(token, owner, repo, branch, path string) (string, error) {
 	url := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s",
 		owner, repo, branch, path)
-	resp, err := http.Get(url) //nolint:noctx
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -440,7 +449,7 @@ func parsePyprojectTOML(content string) (name, desc string) {
 	return
 }
 
-func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText string) ([]Capability, error) {
+func ExtractCapabilities(token, owner, repo, branch string, paths []string, readmeText string) ([]Capability, error) {
 	pathSet := make(map[string]bool, len(paths))
 	for _, p := range paths {
 		pathSet[p] = true
@@ -453,7 +462,7 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 		if !pathSet[fname] {
 			continue
 		}
-		content, err := rawFile(owner, repo, branch, fname)
+		content, err := rawFile(token, owner, repo, branch, fname)
 		if err != nil || content == "" {
 			continue
 		}
@@ -487,7 +496,7 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 		if m == nil {
 			continue
 		}
-		content, err := rawFile(owner, repo, branch, p)
+		content, err := rawFile(token, owner, repo, branch, p)
 		if err != nil || content == "" {
 			continue
 		}
@@ -511,7 +520,7 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 		if m == nil {
 			continue
 		}
-		content, err := rawFile(owner, repo, branch, p)
+		content, err := rawFile(token, owner, repo, branch, p)
 		if err != nil || content == "" {
 			continue
 		}
@@ -538,7 +547,7 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 		} else {
 			continue
 		}
-		content, err := rawFile(owner, repo, branch, p)
+		content, err := rawFile(token, owner, repo, branch, p)
 		if err != nil || content == "" {
 			continue
 		}
@@ -563,7 +572,7 @@ func ExtractCapabilities(owner, repo, branch string, paths []string, readmeText 
 
 	// Pass 5: pyproject.toml
 	if pathSet["pyproject.toml"] {
-		content, err := rawFile(owner, repo, branch, "pyproject.toml")
+		content, err := rawFile(token, owner, repo, branch, "pyproject.toml")
 		if err == nil && content != "" {
 			if pName, pDesc := parsePyprojectTOML(content); pName != "" {
 				caps = append(caps, Capability{
@@ -797,8 +806,8 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 		// Extract capabilities
 		parts := strings.SplitN(key, "/", 2)
 		ownerName, repoName := parts[0], parts[1]
-		readmeText, _ := rawFile(ownerName, repoName, defaultBranch, "README.md")
-		caps, _ := ExtractCapabilities(ownerName, repoName, defaultBranch, paths, readmeText)
+		readmeText, _ := rawFile(token, ownerName, repoName, defaultBranch, "README.md")
+		caps, _ := ExtractCapabilities(token, ownerName, repoName, defaultBranch, paths, readmeText)
 
 		name, _ := repo["name"].(string)
 		desc, _ := repo["description"].(string)
