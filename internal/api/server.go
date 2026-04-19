@@ -202,6 +202,12 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Feedback → files a GitHub issue via gh CLI
 	mux.HandleFunc("POST /api/feedback", s.createFeedback)
 
+	// ── Transcripts ──────────────────────────────────────────────────────────
+	mux.HandleFunc("GET /api/transcripts", s.listTranscripts)
+	mux.HandleFunc("GET /api/transcripts/{id}/content", s.getTranscriptContent)
+	mux.HandleFunc("GET /api/transcripts/{id}/audio", s.getTranscriptAudio)
+	mux.HandleFunc("DELETE /api/transcripts/{id}", s.deleteTranscript)
+
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
