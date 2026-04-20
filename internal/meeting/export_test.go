@@ -1,3 +1,5 @@
+//go:build darwin
+
 package meeting
 
 import sh "github.com/kenotron-ms/side-huddle/bindings/go"
