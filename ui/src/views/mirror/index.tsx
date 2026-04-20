@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Connector, listConnectors } from '../../api/mirror'
 import ConnectorList from './ConnectorList'
 import EntityBrowser from './EntityBrowser'
+import ResizableSidebar from '../../components/ResizableSidebar'
 
 export default function MirrorView() {
   const [connectors, setConnectors] = useState<Connector[]>([])
@@ -18,11 +19,13 @@ export default function MirrorView() {
 
   return (
     <div style={{ display: 'flex', height: '100%', background: 'var(--bg-page)' }}>
-      <ConnectorList
-        connectors={connectors}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-      />
+      <ResizableSidebar defaultWidth={200}>
+        <ConnectorList
+          connectors={connectors}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+        />
+      </ResizableSidebar>
       <div style={{ flex: 1, overflow: 'hidden' }}>
         {selected
           ? <EntityBrowser connector={selected} />

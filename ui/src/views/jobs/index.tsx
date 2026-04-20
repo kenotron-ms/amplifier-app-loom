@@ -3,6 +3,7 @@ import { Job, deleteJob, listJobs } from '../../api/jobs'
 import JobList from './JobList'
 import RunDetail from './RunDetail'
 import ChatView from '../chat'
+import ResizableSidebar from '../../components/ResizableSidebar'
 
 export default function JobsView() {
   const [jobs, setJobs] = useState<Job[]>([])
@@ -38,13 +39,15 @@ export default function JobsView() {
 
   return (
     <div style={{ display: 'flex', height: '100%', background: 'var(--bg-page)' }}>
-      <JobList
-        jobs={jobs}
-        selectedId={selectedId}
-        onSelect={handleSelect}
-        onNew={handleNew}
-        onDelete={handleDelete}
-      />
+      <ResizableSidebar defaultWidth={200}>
+        <JobList
+          jobs={jobs}
+          selectedId={selectedId}
+          onSelect={handleSelect}
+          onNew={handleNew}
+          onDelete={handleDelete}
+        />
+      </ResizableSidebar>
       <div className="flex-1 overflow-hidden">
         {selectedJob
           ? <RunDetail job={selectedJob} onUpdate={handleUpdate} />

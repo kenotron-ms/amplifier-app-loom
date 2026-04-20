@@ -326,7 +326,7 @@ func parseNextLink(header string) string {
 
 // listReposByHandle returns all repos for a given GitHub handle,
 // following pagination.
-func listReposByHandle(ctx context.Context, token, handle string, delay *time.Duration, remaining *int, resetAt *int64) ([]map[string]any, error) {
+func listReposByHandle(ctx context.Context, token, handle string, rl *rateLimiter) ([]map[string]any, error) {
 	var all []map[string]any
 
 	nextURL := fmt.Sprintf("user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member&type=all")
@@ -343,7 +343,7 @@ func listReposByHandle(ctx context.Context, token, handle string, delay *time.Du
 	nextURL = fmt.Sprintf("users/%s/repos?per_page=100&sort=pushed&type=owner", handle)
 
 	for nextURL != "" {
-		body, status, err := ghGet(ctx, token, nextURL, delay, remaining, resetAt)
+		body, status, err := rl.call(ctx, token, nextURL)
 		if err != nil {
 			return nil, err
 		}
@@ -368,14 +368,80 @@ func listReposByHandle(ctx context.Context, token, handle string, delay *time.Du
 	return all, nil
 }
 
+// eventsResult holds the outcome of fetching events for one handle.
+type eventsResult struct {
+	repos    []string // full_names of repos with push/create activity since the cutoff
+	overflow bool     // true if the 300-event cap was hit before reaching the cutoff
+}
+
+// fetchEventsSince returns repos that had push or create activity for handle since the
+// cutoff time. GitHub caps event history at 300 events (3 pages × 100); if we exhaust
+// that without reaching the cutoff, overflow=true and the caller should fall back to a
+// full repo listing for this handle.
+func fetchEventsSince(ctx context.Context, token, handle string, since time.Time, rl *rateLimiter) (eventsResult, error) {
+	seen := map[string]bool{}
+	var repos []string
+	totalEvents := 0
+
+	for page := 1; page <= 3; page++ {
+		path := fmt.Sprintf("users/%s/events?per_page=100&page=%d", handle, page)
+		body, status, err := rl.call(ctx, token, path)
+		if err != nil {
+			return eventsResult{}, err
+		}
+		if status == 404 {
+			break
+		}
+		if status != 200 {
+			return eventsResult{}, fmt.Errorf("HTTP %d fetching events for %s", status, handle)
+		}
+
+		var events []struct {
+			Type      string    `json:"type"`
+			CreatedAt time.Time `json:"created_at"`
+			Repo      struct {
+				Name string `json:"name"` // "owner/repo"
+			} `json:"repo"`
+		}
+		if err := json.Unmarshal(body, &events); err != nil {
+			return eventsResult{}, err
+		}
+		if len(events) == 0 {
+			break
+		}
+
+		pastCutoff := false
+		for _, e := range events {
+			totalEvents++
+			if !e.CreatedAt.After(since) {
+				pastCutoff = true
+				break
+			}
+			if e.Type == "PushEvent" || e.Type == "CreateEvent" {
+				if !seen[e.Repo.Name] {
+					seen[e.Repo.Name] = true
+					repos = append(repos, e.Repo.Name)
+				}
+			}
+		}
+
+		if pastCutoff || len(events) < 100 {
+			break
+		}
+	}
+
+	overflow := totalEvents >= 300
+	return eventsResult{repos: repos, overflow: overflow}, nil
+}
+
 // listOwnRepos returns all repos the authenticated user can access (including private).
 // Used only for ExtraHandles that match the token owner.
-func listOwnRepos(ctx context.Context, token string, delay *time.Duration, remaining *int, resetAt *int64) ([]map[string]any, error) {
+func listOwnRepos(ctx context.Context, token string, rl *rateLimiter) ([]map[string]any, error) {
 	var all []map[string]any
 	nextPath := "user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member"
 
 	for nextPath != "" {
-		body, status, err := ghGet(ctx, token, nextPath, delay, remaining, resetAt)
+		body, status, err := rl.call(ctx, token, nextPath)
 		if err != nil {
 			return nil, err
 		}
@@ -653,16 +719,8 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 		return nil, fmt.Errorf("loading state: %w", err)
 	}
 
-	var (
-		delay     time.Duration
-		remaining = 5000
-		resetAt   int64
-	)
-	if token != "" {
-		delay = 50 * time.Millisecond
-	} else {
-		delay = 1200 * time.Millisecond
-	}
+	// ── Rate limiter (shared by discovery and scan workers) ──────────────────
+	rl := newRateLimiter(token)
 
 	// ── Resolve handles from team feeds ───────────────────────────────────────
 	if !opts.Quiet {
@@ -676,77 +734,19 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 		fmt.Printf("%d handles from team feeds\n", len(handles))
 	}
 
-	// ── Collect repos from all handles ────────────────────────────────────────
-	// Deduplicate by full_name across handles
-	reposByKey := map[string]map[string]any{}
-
-	// Own repos first (includes private)
-	if !opts.Quiet {
-		fmt.Print("Fetching your repos (including private)... ")
-	}
-	ownRepos, err := listOwnRepos(ctx, token, &delay, &remaining, &resetAt)
-	if err != nil && !opts.Quiet {
-		fmt.Printf("warning: %v\n", err)
-	}
-	for _, r := range ownRepos {
-		if k, ok := r["full_name"].(string); ok && k != "" {
-			reposByKey[k] = r
-		}
-	}
-	if !opts.Quiet {
-		fmt.Printf("%d repos\n", len(ownRepos))
-	}
-
-	// Team member repos (public only, but that's fine for teammates)
-	for _, handle := range handles {
-		if !opts.Quiet {
-			fmt.Printf("  %s... ", handle)
-		}
-		repos, err := listReposByHandle(ctx, token, handle, &delay, &remaining, &resetAt)
-		if err != nil {
-			if !opts.Quiet {
-				fmt.Printf("error: %v\n", err)
-			}
-			continue
-		}
-		for _, r := range repos {
-			if k, ok := r["full_name"].(string); ok && k != "" {
-				if _, exists := reposByKey[k]; !exists {
-					reposByKey[k] = r
-				}
-			}
-		}
-		if !opts.Quiet {
-			fmt.Printf("%d repos\n", len(repos))
-		}
-	}
-
-	// Extra specific repos (fetched directly)
-	for _, extraKey := range src.ExtraRepos {
-		if _, exists := reposByKey[extraKey]; exists {
-			continue
-		}
-		body, status, err := ghGet(ctx, token, "repos/"+extraKey, &delay, &remaining, &resetAt)
-		if err != nil || status != 200 {
-			continue
-		}
-		var r map[string]any
-		if json.Unmarshal(body, &r) == nil {
-			reposByKey[extraKey] = r
-		}
-	}
-
-	if !opts.Quiet {
-		fmt.Printf("\nScanning %d unique repos for amplifier bundles...\n", len(reposByKey))
-	}
-
 	result := &ScanResult{}
 
-	// Track which keys we saw (for removal detection)
+	// seenKeys tracks all discovered repos for removal detection.
+	// Written only by the discovery goroutine; safe to read after outCh is drained.
 	seenKeys := map[string]bool{}
-	for k := range reposByKey {
-		seenKeys[k] = true
+
+	// Incremental mode: use events to diff against last scan instead of listing all repos.
+	// Falls back to full scan on first run, --force, or if the index is empty.
+	var lastScan time.Time
+	if idx.LastScan != "" {
+		lastScan, _ = time.Parse(time.RFC3339, idx.LastScan)
 	}
+	incremental := !opts.Force && !lastScan.IsZero() && len(idx.Repos) > 0
 
 	// ── Parallel repo scan ──────────────────────────────────────────────────────
 	// Gate 1 (pushed_at) is checked without any API call — pure local state.
@@ -755,8 +755,6 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 	// raw file reads (rawFile / ExtractCapabilities) run fully concurrently.
 
 	const workers = 8
-
-	rl := newRateLimiter(token)
 
 	type repoWork struct {
 		key  string
@@ -770,8 +768,8 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 		prevKey string // for "removed"
 	}
 
-	workCh := make(chan repoWork, len(reposByKey))
-	outCh  := make(chan repoOutcome, len(reposByKey))
+	workCh := make(chan repoWork, 64)
+	outCh  := make(chan repoOutcome, 64)
 
 	var wg sync.WaitGroup
 	for i := 0; i < workers; i++ {
@@ -899,14 +897,148 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 		}()
 	}
 
-	// Feed workers
-	for key, repo := range reposByKey {
-		workCh <- repoWork{key: key, repo: repo}
-	}
-	close(workCh)
-
 	// Close output channel once all workers finish
 	go func() { wg.Wait(); close(outCh) }()
+
+	// Discovery goroutine: feeds workCh as repos are found so scanning begins immediately.
+	// In incremental mode it uses the Events API to find only changed repos; in full mode
+	// it lists all repos per handle. seenKeys is safe to read after outCh is drained
+	// (happens-before via wg.Wait+close(outCh)).
+	go func() {
+		defer close(workCh)
+
+		seen := map[string]bool{}
+		sendRepo := func(r map[string]any) {
+			k, ok := r["full_name"].(string)
+			if !ok || k == "" {
+				return
+			}
+			if seen[k] {
+				return
+			}
+			seen[k] = true
+			seenKeys[k] = true
+			workCh <- repoWork{key: k, repo: r}
+		}
+
+		// fetchRepoByKey fetches a single repo's metadata and sends it to workCh.
+		fetchRepoByKey := func(key string) {
+			if seen[key] {
+				return
+			}
+			body, status, err := rl.call(ctx, token, "repos/"+key)
+			if err != nil || status != 200 {
+				return
+			}
+			var r map[string]any
+			if json.Unmarshal(body, &r) == nil {
+				sendRepo(r)
+			}
+		}
+
+		if incremental {
+			// Pre-seed seenKeys with all cached repos so removal detection doesn't
+			// cull repos we didn't re-visit. Repos deleted from GitHub stay in the
+			// index until the next full scan (--force).
+			for k := range idx.Repos {
+				seenKeys[k] = true
+			}
+			if !opts.Quiet {
+				fmt.Printf("Incremental scan (last: %s)\n", idx.LastScan)
+			}
+
+			// Own repos: always check to catch new/removed private repos.
+			if !opts.Quiet {
+				fmt.Print("Fetching your repos (including private)... ")
+			}
+			ownRepos, err := listOwnRepos(ctx, token, rl)
+			if err != nil && !opts.Quiet {
+				fmt.Printf("warning: %v\n", err)
+			}
+			for _, r := range ownRepos {
+				sendRepo(r)
+			}
+			if !opts.Quiet {
+				fmt.Printf("%d repos\n", len(ownRepos))
+			}
+
+			// Team repos: events diff — only fetch metadata for repos that changed.
+			for _, handle := range handles {
+				ev, err := fetchEventsSince(ctx, token, handle, lastScan, rl)
+				if err != nil {
+					if !opts.Quiet {
+						fmt.Printf("  %s... events error: %v\n", handle, err)
+					}
+					continue
+				}
+				if ev.overflow {
+					// Hit the 300-event cap; fall back to full listing for this handle.
+					if !opts.Quiet {
+						fmt.Printf("  %s... (events overflow) ", handle)
+					}
+					repos, err := listReposByHandle(ctx, token, handle, rl)
+					if err != nil {
+						if !opts.Quiet {
+							fmt.Printf("error: %v\n", err)
+						}
+						continue
+					}
+					for _, r := range repos {
+						sendRepo(r)
+					}
+					if !opts.Quiet {
+						fmt.Printf("%d repos\n", len(repos))
+					}
+				} else {
+					if !opts.Quiet {
+						fmt.Printf("  %s... %d changed\n", handle, len(ev.repos))
+					}
+					for _, key := range ev.repos {
+						fetchRepoByKey(key)
+					}
+				}
+			}
+		} else {
+			// Full scan: list all repos for every handle.
+			if !opts.Quiet {
+				fmt.Print("Fetching your repos (including private)... ")
+			}
+			ownRepos, err := listOwnRepos(ctx, token, rl)
+			if err != nil && !opts.Quiet {
+				fmt.Printf("warning: %v\n", err)
+			}
+			for _, r := range ownRepos {
+				sendRepo(r)
+			}
+			if !opts.Quiet {
+				fmt.Printf("%d repos\n", len(ownRepos))
+			}
+
+			for _, handle := range handles {
+				if !opts.Quiet {
+					fmt.Printf("  %s... ", handle)
+				}
+				repos, err := listReposByHandle(ctx, token, handle, rl)
+				if err != nil {
+					if !opts.Quiet {
+						fmt.Printf("error: %v\n", err)
+					}
+					continue
+				}
+				for _, r := range repos {
+					sendRepo(r)
+				}
+				if !opts.Quiet {
+					fmt.Printf("%d repos\n", len(repos))
+				}
+			}
+		}
+
+		// Extra specific repos — always checked regardless of mode (small explicit list).
+		for _, extraKey := range src.ExtraRepos {
+			fetchRepoByKey(extraKey)
+		}
+	}()
 
 	// Collect results (single goroutine — no mutex needed on idx/st/result)
 	for out := range outCh {
@@ -953,8 +1085,8 @@ func Scan(ctx context.Context, dir string, opts ScanOptions) (*ScanResult, error
 	idx.LastScan = time.Now().UTC().Format(time.RFC3339)
 	idx.Version = 1
 	st.Version = 1
-	st.RateLimit = &RateLimitInfo{Remaining: remaining, ResetAt: resetAt}
-	result.APIRemaining = remaining
+	st.RateLimit = &RateLimitInfo{Remaining: rl.remaining, ResetAt: rl.resetAt}
+	result.APIRemaining = rl.remaining
 
 	if err := SaveIndex(dir, idx); err != nil {
 		return nil, fmt.Errorf("saving index: %w", err)

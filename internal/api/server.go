@@ -199,6 +199,20 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/bundles/{id}", s.removeBundle)
 	mux.HandleFunc("POST /api/bundles/{id}/toggle", s.toggleBundle)
 
+	// Amplifier-native bundle state (reads from ~/.amplifier/settings.yaml + registry.json)
+	mux.HandleFunc("GET /api/amplifier/bundles", s.listAmplifierBundles)
+	mux.HandleFunc("POST /api/amplifier/bundles/app", s.enableAmplifierBundleApp)
+	mux.HandleFunc("DELETE /api/amplifier/bundles/app", s.disableAmplifierBundleApp)
+	mux.HandleFunc("DELETE /api/amplifier/bundles/active", s.clearAmplifierActive)
+	mux.HandleFunc("POST /api/amplifier/bundles/{name}/activate", s.activateAmplifierBundle)
+	mux.HandleFunc("DELETE /api/amplifier/bundles/{name}", s.removeAmplifierBundle)
+
+	// GitHub bundle index
+	mux.HandleFunc("GET /api/index/status", s.getIndexStatus)
+	mux.HandleFunc("POST /api/index/scan", s.triggerIndexScan)
+	mux.HandleFunc("POST /api/index/watch", s.addIndexWatch)
+	mux.HandleFunc("DELETE /api/index/watch", s.removeIndexWatch)
+
 	// Feedback → files a GitHub issue via gh CLI
 	mux.HandleFunc("POST /api/feedback", s.createFeedback)
 

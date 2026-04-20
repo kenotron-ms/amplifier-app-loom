@@ -25,7 +25,7 @@ export default function JobList({ jobs, selectedId, onSelect, onNew, onDelete }:
 
   return (
     <div style={{
-      width: 200, flexShrink: 0, display: 'flex', flexDirection: 'column',
+      width: '100%', display: 'flex', flexDirection: 'column',
       background: 'var(--bg-sidebar)', borderRight: '1px solid var(--border)', height: '100%',
     }}>
       <div style={{
