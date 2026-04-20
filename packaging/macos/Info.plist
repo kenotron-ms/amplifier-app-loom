@@ -27,5 +27,9 @@
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>NSUserNotificationUsageDescription</key>
+    <string>Loom uses notifications to alert you when a meeting is detected and when transcription is ready.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Loom records your microphone during meetings to create transcripts.</string>
 </dict>
 </plist>

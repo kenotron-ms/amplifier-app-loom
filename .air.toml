@@ -4,9 +4,9 @@ root = "."
 tmp_dir = ".air_tmp"
 
 [build]
-  cmd     = "go build -ldflags \"-X github.com/ms/amplifier-app-loom/internal/api.Version=dev -s -w\" -o dist/loom ./cmd/loom/"
-  bin     = "dist/loom"
-  args_bin = ["_serve"]
+  cmd      = "CGO_ENABLED=1 go build -ldflags \"-X github.com/ms/amplifier-app-loom/internal/api.Version=99.0.0-dev -s -w\" -o dist/loom ./cmd/loom/"
+  bin      = "dist/loom"
+  full_bin = "make app-sync"
 
   # Watch these extensions
   include_ext = ["go", "mod", "sum"]

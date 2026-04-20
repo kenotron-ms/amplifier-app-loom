@@ -4,7 +4,7 @@ MODULE   = github.com/ms/amplifier-app-loom
 VERSION  = 0.8.5
 LDFLAGS  = -ldflags "-X $(MODULE)/internal/api.Version=$(VERSION) -s -w"
 
-.PHONY: build run install-svc uninstall-svc test clean cross ui release dev dev-go dev-ui
+.PHONY: build run install-svc uninstall-svc test clean cross ui release dev dev-go dev-ui app app-sync
 
 ui:
 	cd ui && npm install && npm run build
@@ -22,19 +22,47 @@ run: build
 
 # ── Development: hot-reload Go (air) + Vite dev server in parallel ────────
 # Browse http://localhost:5173  →  Vite proxies /api + /ws → Go at :7700
-# Uses make -j2 so each process runs directly with its own stdout — no
-# subshell buffering, no silent background jobs.
+#
+# make app      — full build + assemble dist/Loom.app + ad-hoc sign + launch
+# make app-sync — fast path used by air: drop new binary → re-sign → relaunch
+# make dev      — bootstrap Loom.app then watch: .go save → rebuild → relaunch
+
+app: ui $(DIST)
+	CGO_ENABLED=1 go build -ldflags "-X $(MODULE)/internal/api.Version=99.0.0-dev -s -w" -o $(DIST)/$(BINARY) ./cmd/loom/
+	@rm -rf dist/Loom.app
+	@mkdir -p dist/Loom.app/Contents/MacOS dist/Loom.app/Contents/Resources
+	@cp dist/loom dist/Loom.app/Contents/MacOS/loom
+	@sed 's/{{VERSION}}/dev/g' packaging/macos/Info.plist > dist/Loom.app/Contents/Info.plist
+	@cp packaging/macos/Loom.icns dist/Loom.app/Contents/Resources/ 2>/dev/null || true
+	@codesign --force --deep --sign - dist/Loom.app
+	@xattr -cr dist/Loom.app
+	@open dist/Loom.app
+	@printf "\033[32m→ dist/Loom.app launched\033[0m\n"
+
+app-sync:
+	@pkill -f "dist/Loom.app/Contents/MacOS/loom" 2>/dev/null || true
+	@sleep 0.3
+	@cp dist/loom dist/Loom.app/Contents/MacOS/loom
+	@codesign --force --deep --sign - dist/Loom.app
+	@xattr -cr dist/Loom.app
+	@open dist/Loom.app
+	@printf "\033[32m→ Loom.app reloaded\033[0m\n"
+
 dev:
 	@mkdir -p $(DIST)
 	@if [ ! -f web/dist/index.html ]; then \
 		printf "\033[33m→ web/dist is empty — building UI assets first...\033[0m\n"; \
 		$(MAKE) ui; \
 	fi
+	@if [ ! -d dist/Loom.app ]; then \
+		printf "\033[33m→ building initial Loom.app...\033[0m\n"; \
+		$(MAKE) app; \
+	fi
 	@command -v air >/dev/null 2>&1 || (printf "\033[33m→ Installing air...\033[0m\n" && go install github.com/air-verse/air@latest)
 	@printf "\033[33m→ Stopping any running loom service...\033[0m\n"
 	@loom stop 2>/dev/null || true
 	@printf "\033[32m→ Dev environment starting:\033[0m\n"
-	@printf "  \033[36m•\033[0m Go hot-reload (air)    — .go changes rebuild → :7700\n"
+	@printf "  \033[36m•\033[0m Go hot-reload (air)    — .go save → rebuild → Loom.app relaunches\n"
 	@printf "  \033[36m•\033[0m Vite dev server         — http://localhost:5173\n\n"
 	@$(MAKE) -j2 dev-go dev-ui
 

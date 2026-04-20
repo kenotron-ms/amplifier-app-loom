@@ -4,19 +4,21 @@ import ProjectDetail from './views/projects/ProjectDetail'
 import JobsView from './views/jobs'
 import MirrorView from './views/mirror'
 import BundlesView from './views/bundles'
+import TranscriptsView from './views/transcripts'
 import FeedbackModal from './components/FeedbackModal'
 import SettingsModal from './components/SettingsModal'
 
-type Tab = 'projects' | 'jobs' | 'mirror' | 'bundles'
+type Tab = 'projects' | 'jobs' | 'mirror' | 'bundles' | 'transcripts'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'jobs',      label: 'Jobs' },
   { id: 'projects',  label: 'Projects' },
   { id: 'mirror',    label: 'Mirror' },
   { id: 'bundles',   label: 'Registry' },
+  { id: 'transcripts', label: 'Transcripts' },
 ]
 
-const VALID_TABS = new Set<Tab>(['jobs', 'projects', 'mirror', 'bundles'])
+const VALID_TABS = new Set<Tab>(['jobs', 'projects', 'mirror', 'bundles', 'transcripts'])
 
 function tabFromHash(): Tab {
   const hash = window.location.hash.slice(1) as Tab
@@ -182,6 +184,7 @@ export default function App() {
         {active === 'jobs'     && <JobsView />}
         {active === 'mirror'   && <MirrorView />}
         {active === 'bundles'  && <BundlesView />}
+        {active === 'transcripts' && <TranscriptsView />}
       </div>
 
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
