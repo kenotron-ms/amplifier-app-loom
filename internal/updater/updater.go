@@ -346,7 +346,9 @@ func KillAllLoomProcesses() {
 			continue
 		}
 		slog.Info("updater: killing loom process", "pid", pid)
-		_ = syscall.Kill(pid, syscall.SIGKILL)
+		if p, err := os.FindProcess(pid); err == nil {
+			_ = p.Kill()
+		}
 	}
 
 	// Brief pause to let killed processes fully exit.
