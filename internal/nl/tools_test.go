@@ -49,6 +49,8 @@ func (m *memStore) ListRunsForJob(_ context.Context, _ string, _ int) ([]*types.
 func (m *memStore) ListRecentRuns(_ context.Context, _ int) ([]*types.JobRun, error) {
 	return nil, nil
 }
+func (m *memStore) DeleteRun(_ context.Context, _ string) error                         { return nil }
+func (m *memStore) DeleteRunsForJob(_ context.Context, _ string) error                    { return nil }
 func (m *memStore) DeleteAllRuns(_ context.Context) error                                   { return nil }
 func (m *memStore) AppendChatMessage(_ context.Context, _ types.ChatMessage) error          { return nil }
 func (m *memStore) ListChatHistory(_ context.Context) ([]types.ChatMessage, error)          { return nil, nil }

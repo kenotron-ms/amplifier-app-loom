@@ -33,6 +33,9 @@ func New(db *bolt.DB) (*Service, error) {
 		if _, err := tx.CreateBucketIfNotExists(bucketProjects); err != nil {
 			return fmt.Errorf("create bucket %q: %w", bucketProjects, err)
 		}
+		if _, err := tx.CreateBucketIfNotExists(bucketSessions); err != nil {
+			return fmt.Errorf("create bucket %q: %w", bucketSessions, err)
+		}
 		return nil
 	})
 	if err != nil {
@@ -126,7 +129,12 @@ func (s *Service) UpdateProject(_ context.Context, id, name, workspace string) (
 
 func (s *Service) DeleteProject(_ context.Context, id string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(bucketProjects).Delete([]byte(id))
+		if b := tx.Bucket(bucketProjects); b != nil {
+			if err := b.Delete([]byte(id)); err != nil {
+				return err
+			}
+		}
+		return s.deleteSessionsForProject(tx, id)
 	})
 }
 
@@ -148,3 +156,103 @@ func (s *Service) TouchProject(_ context.Context, id string) error {
 		return tx.Bucket(bucketProjects).Put([]byte(id), updated)
 	})
 }
+
+    // ── Sessions ──────────────────────────────────────────────────────────────────
+
+    var bucketSessions = []byte("sessions")
+
+    // Session is a working context (git worktree / branch) within a Project.
+    type Session struct {
+    	ID        string `json:"id"`
+    	ProjectID string `json:"projectID"`
+    	Branch    string `json:"branch"`
+    	Workdir   string `json:"workdir"`
+    	Status    string `json:"status"`
+    	CreatedAt int64  `json:"createdAt"`
+    }
+
+    func (s *Service) CreateSession(_ context.Context, projectID, branch, workdir string) (*Session, error) {
+    	sess := &Session{
+    		ID:        uuid.New().String(),
+    		ProjectID: projectID,
+    		Branch:    branch,
+    		Workdir:   workdir,
+    		Status:    "idle",
+    		CreatedAt: time.Now().Unix(),
+    	}
+    	return sess, s.db.Update(func(tx *bolt.Tx) error {
+    		b, err := tx.CreateBucketIfNotExists(bucketSessions)
+    		if err != nil {
+    			return err
+    		}
+    		data, err := json.Marshal(sess)
+    		if err != nil {
+    			return err
+    		}
+    		return b.Put([]byte(sess.ID), data)
+    	})
+    }
+
+    func (s *Service) ListSessions(_ context.Context, projectID string) ([]*Session, error) {
+    	var out []*Session
+    	return out, s.db.View(func(tx *bolt.Tx) error {
+    		b := tx.Bucket(bucketSessions)
+    		if b == nil {
+    			return nil
+    		}
+    		return b.ForEach(func(_, v []byte) error {
+    			var sess Session
+    			if err := json.Unmarshal(v, &sess); err != nil {
+    				return err
+    			}
+    			if sess.ProjectID == projectID {
+    				cp := sess
+    				out = append(out, &cp)
+    			}
+    			return nil
+    		})
+    	})
+    }
+
+    func (s *Service) GetSession(_ context.Context, id string) (*Session, error) {
+    	var sess Session
+    	err := s.db.View(func(tx *bolt.Tx) error {
+    		b := tx.Bucket(bucketSessions)
+    		if b == nil {
+    			return fmt.Errorf("session %q not found", id)
+    		}
+    		v := b.Get([]byte(id))
+    		if v == nil {
+    			return fmt.Errorf("session %q not found", id)
+    		}
+    		return json.Unmarshal(v, &sess)
+    	})
+    	if err != nil {
+    		return nil, err
+    	}
+    	return &sess, nil
+    }
+
+    func (s *Service) deleteSessionsForProject(tx *bolt.Tx, projectID string) error {
+    	b := tx.Bucket(bucketSessions)
+    	if b == nil {
+    		return nil
+    	}
+    	var toDelete [][]byte
+    	_ = b.ForEach(func(k, v []byte) error {
+    		var sess Session
+    		if err := json.Unmarshal(v, &sess); err == nil && sess.ProjectID == projectID {
+    			cp := make([]byte, len(k))
+    			copy(cp, k)
+    			toDelete = append(toDelete, cp)
+    		}
+    		return nil
+    	})
+    	for _, k := range toDelete {
+    		if err := b.Delete(k); err != nil {
+    			return err
+    		}
+    	}
+    	return nil
+    }
+    

@@ -14,29 +14,6 @@ import (
 	sh "github.com/kenotron-ms/side-huddle/bindings/go"
 )
 
-// State represents the current phase of the MeetingService.
-type State int
-
-const (
-	StateIdle        State = iota
-	StateMonitoring
-	StateRecording
-	StateTranscribing
-)
-
-func (s State) String() string {
-	switch s {
-	case StateIdle:
-		return "idle"
-	case StateMonitoring:
-		return "monitoring"
-	case StateRecording:
-		return "recording"
-	case StateTranscribing:
-		return "transcribing"
-	}
-	return "unknown"
-}
 
 // listenerFactory creates a side-huddle listener for a given output directory.
 // Overridable in tests via SetListenerFactory.

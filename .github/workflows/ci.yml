@@ -18,6 +18,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Create web dist placeholder
+        run: mkdir -p web/dist && touch web/dist/.keep
+
       - name: Test
         run: go test ./...
 
@@ -61,4 +64,4 @@ jobs:
           CGO_ENABLED: ${{ matrix.cgo }}
         run: |
           mkdir -p dist
-          go build -o dist/agent-daemon-${{ matrix.name }}${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/agent-daemon/
+          go build -o dist/loom-${{ matrix.name }}${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/loom/
