@@ -24,8 +24,7 @@ function HealthDot({ health }: { health: string }) {
 export default function ConnectorList({ connectors, selectedId, onSelect }: Props) {
   return (
     <div style={{
-      width: 200,
-      flexShrink: 0,
+      width: '100%',
       display: 'flex',
       flexDirection: 'column',
       background: 'var(--bg-sidebar)',

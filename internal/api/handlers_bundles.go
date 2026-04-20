@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -265,6 +266,161 @@ func resolveAmplifier() string {
 		}
 	}
 	return "amplifier"
+}
+
+// ── Amplifier-native bundle state ────────────────────────────────────────────
+// Drives off ~/.amplifier/settings.yaml (bundle.added / .active / .app) and
+// ~/.amplifier/registry.json rather than loom's own config store.
+
+// AmplifierBundleEntry is the shape returned by GET /api/amplifier/bundles.
+type AmplifierBundleEntry struct {
+	Name       string  `json:"name"`
+	URI        string  `json:"uri"`
+	Active     bool    `json:"active"`     // this bundle is bundle.active
+	AppEnabled bool    `json:"appEnabled"` // URI is in bundle.app
+	AppSpec    string  `json:"appSpec"`    // exact spec to add/remove from bundle.app
+	Downloaded bool    `json:"downloaded"` // local_path present in registry.json
+	Version    *string `json:"version"`    // from registry.json, null if unknown
+}
+
+// GET /api/amplifier/bundles
+func (s *Server) listAmplifierBundles(w http.ResponseWriter, _ *http.Request) {
+	state, err := amplifier.ReadGlobalBundleSettings()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "read settings: "+err.Error())
+		return
+	}
+
+	regEntries, _ := amplifier.ReadBundleRegistry() // tolerate missing registry
+
+	// Build an O(1) lookup set for bundle.app (keyed by trimmed URI).
+	appSet := make(map[string]bool, len(state.App))
+	for _, uri := range state.App {
+		appSet[strings.TrimSpace(uri)] = true
+	}
+
+	// Track which app URIs were matched to a bundle.added entry.
+	matchedAppURIs := make(map[string]bool)
+
+	entries := make([]AmplifierBundleEntry, 0, len(state.Added)+len(state.App))
+	for name, uri := range state.Added {
+		appSpec := strings.TrimSpace(uri)
+		inApp := appSet[appSpec]
+		if inApp {
+			matchedAppURIs[appSpec] = true
+		}
+		entry := AmplifierBundleEntry{
+			Name:       name,
+			URI:        uri,
+			Active:     name == state.Active,
+			AppEnabled: inApp,
+			AppSpec:    appSpec,
+		}
+		if re, ok := regEntries[name]; ok {
+			entry.Downloaded = re.Downloaded()
+			entry.Version = re.Version
+		}
+		entries = append(entries, entry)
+	}
+
+	// Include bundle.app entries that have no corresponding bundle.added entry.
+	// These are "orphan" overlays — direct behavior/spec file references.
+	for _, appURI := range state.App {
+		spec := strings.TrimSpace(appURI)
+		if matchedAppURIs[spec] {
+			continue
+		}
+		// Derive a display name from the URI (basename without extension).
+		name := filepath.Base(spec)
+		name = strings.TrimPrefix(name, "file://")
+		for _, ext := range []string{".yaml", ".yml", ".md"} {
+			name = strings.TrimSuffix(name, ext)
+		}
+		entries = append(entries, AmplifierBundleEntry{
+			Name:       name,
+			URI:        appURI,
+			AppEnabled: true,
+			AppSpec:    spec,
+			Downloaded: true, // assume local file exists
+		})
+	}
+
+	// Alphabetical only — preserve user's expected order, no reordering by state.
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name < entries[j].Name
+	})
+
+	writeJSON(w, http.StatusOK, entries)
+}
+
+// POST /api/amplifier/bundles/app — enable a spec as always-on overlay.
+// Body: {"spec": "<uri>"}
+func (s *Server) enableAmplifierBundleApp(w http.ResponseWriter, r *http.Request) {
+	spec := appSpecFromRequest(r)
+	if spec == "" {
+		writeError(w, http.StatusBadRequest, "spec is required")
+		return
+	}
+	if err := ampBundleAddApp(spec); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/amplifier/bundles/app — remove a spec from always-on overlays.
+// Body: {"spec": "<uri>"}
+func (s *Server) disableAmplifierBundleApp(w http.ResponseWriter, r *http.Request) {
+	spec := appSpecFromRequest(r)
+	if spec == "" {
+		writeError(w, http.StatusBadRequest, "spec is required")
+		return
+	}
+	if err := ampBundleRemoveApp(spec); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/amplifier/bundles/{name}/activate — set as the primary active bundle
+func (s *Server) activateAmplifierBundle(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if err := amplifier.SetGlobalActive(name); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/amplifier/bundles/active — clear bundle.active (falls back to foundation)
+func (s *Server) clearAmplifierActive(w http.ResponseWriter, _ *http.Request) {
+	if err := amplifier.SetGlobalActive(""); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/amplifier/bundles/{name} — remove bundle entirely
+func (s *Server) removeAmplifierBundle(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if err := runAmpCmd("bundle", "remove", name); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// appSpecFromRequest reads the "spec" field from a JSON body or "spec" query param.
+func appSpecFromRequest(r *http.Request) string {
+	var body struct {
+		Spec string `json:"spec"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.Spec != "" {
+		return strings.TrimSpace(body.Spec)
+	}
+	return strings.TrimSpace(r.URL.Query().Get("spec"))
 }
 
 // ── Private local registry ────────────────────────────────────────────────────

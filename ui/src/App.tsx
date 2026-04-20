@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import ProjectsGrid from './views/projects'
 import ProjectDetail from './views/projects/ProjectDetail'
 import JobsView from './views/jobs'
@@ -14,9 +14,16 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'jobs',      label: 'Jobs' },
   { id: 'projects',  label: 'Projects' },
   { id: 'mirror',    label: 'Mirror' },
-  { id: 'bundles',   label: 'Bundles' },
+  { id: 'bundles',   label: 'Registry' },
   { id: 'transcripts', label: 'Transcripts' },
 ]
+
+const VALID_TABS = new Set<Tab>(['jobs', 'projects', 'mirror', 'bundles', 'transcripts'])
+
+function tabFromHash(): Tab {
+  const hash = window.location.hash.slice(1) as Tab
+  return VALID_TABS.has(hash) ? hash : 'jobs'
+}
 
 // Loom woven-grid logo mark
 function LoomLogo() {
@@ -61,10 +68,21 @@ function SettingsIcon() {
 }
 
 export default function App() {
-  const [active, setActive]             = useState<Tab>('jobs')
+  const [active, setActive]             = useState<Tab>(tabFromHash)
   const [showFeedback, setShowFeedback] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+
+  // Keep URL hash in sync with active tab, and handle back/forward.
+  useEffect(() => {
+    window.location.hash = active
+  }, [active])
+
+  useEffect(() => {
+    const onHashChange = () => setActive(tabFromHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg-page)' }}>

@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+html { font-size: 20px; }
+
 /* ── Canvas Design Tokens ──────────────────────────────────────────────── */
 :root {
   /* Backgrounds */
