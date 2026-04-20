@@ -19,7 +19,7 @@ jobs:
           cache: true
 
       - name: Create web dist placeholder
-        run: mkdir -p web/dist && touch web/dist/.keep
+        run: mkdir -p web/dist && echo '<!DOCTYPE html><html><body></body></html>' > web/dist/index.html
 
       - name: Test
         run: go test ./...
@@ -56,6 +56,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Create web dist placeholder
+        shell: bash
+        run: mkdir -p web/dist && echo '<!DOCTYPE html><html><body></body></html>' > web/dist/index.html
 
       - name: Build
         env:
