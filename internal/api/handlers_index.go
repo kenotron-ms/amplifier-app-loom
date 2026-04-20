@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/ms/amplifier-app-loom/internal/index"
 	"github.com/ms/amplifier-app-loom/internal/types"
 )
@@ -97,6 +98,7 @@ func (s *Server) addIndexWatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	job := &types.Job{
+		ID:   uuid.New().String(),
 		Name: "amplifier-bundle-index",
 		Trigger: types.Trigger{
 			Type:     types.TriggerLoop,
