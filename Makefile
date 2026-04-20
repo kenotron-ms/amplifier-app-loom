@@ -1,7 +1,7 @@
 BINARY   = loom
 DIST     = dist
 MODULE   = github.com/ms/amplifier-app-loom
-VERSION  = 0.8.5
+VERSION  = 0.9.0
 LDFLAGS  = -ldflags "-X $(MODULE)/internal/api.Version=$(VERSION) -s -w"
 
 .PHONY: build run install-svc uninstall-svc test clean cross ui release dev dev-go dev-ui app app-sync
